@@ -139,13 +139,15 @@ const getCurrentUiLanguage = () => {
     return matches.length ? matches[ 0 ] : null;
 };
 
-const getDesiredLanguage = () => {
+/*
+const getDesiredLanguage = ( formDefaultLanguage ) => {
     // Here we are essential duplicating the LanguageDetector module, which is not great, but very simple in our case.
     const src = settings.languageOverrideParameter ? settings.languageOverrideParameter.value : navigator.language;
     const matches = src.match( LANGEXTRACT );
 
     return matches.length ? matches[ 0 ] : null;
 };
+*/
 
 export {
     init,
@@ -153,7 +155,7 @@ export {
     localize,
     loadTranslation,
     getCurrentUiLanguage,
-    getDesiredLanguage
+    //getDesiredLanguage
 };
 
 /**

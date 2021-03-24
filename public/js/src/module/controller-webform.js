@@ -9,7 +9,7 @@ import { Form } from 'enketo-core';
 import downloadUtils from 'enketo-core/src/js/download-utils';
 import events from './event';
 import fileManager from './file-manager';
-import { t, localize, getCurrentUiLanguage, getDesiredLanguage } from './translator';
+import { t, localize, getCurrentUiLanguage } from './translator';
 import records from './records-queue';
 import $ from 'jquery';
 import encryptor from './encryptor';
@@ -41,14 +41,26 @@ function init( formEl, data, loadErrors = [] ) {
                 fileManager.setInstanceAttachments( data.instanceAttachments );
             }
 
-            if ( getCurrentUiLanguage() === getDesiredLanguage() ) {
-                formOptions.language = getCurrentUiLanguage();
-            } else {
-                formOptions.language = getDesiredLanguage();
+            // override default form language if ?lang= querystring was used
+            if ( settings.languageOverrideParameter ) {
+                formOptions.language = settings.languageOverrideParameter.value;
             }
 
             form = new Form( formEl, data, formOptions );
             loadErrors = loadErrors.concat( form.init() );
+
+            // TODO: if no default form language is defined, switch form language to navigator language if possible
+            //if ( !form.defaultLanguage && form.languages.includes( /* extract of navigator language */ ) ){
+            // change form language....
+            // TODO: I think we may have to abandon this approach and out the default language in enketo-transformer instead
+            //}
+
+            if ( getCurrentUiLanguage() !== form.currentLanguage )  {
+                console.log( 'changing UI language to', form.currentLanguage );
+                localize( document.querySelector( 'body' ), form.currentLanguage )
+                    .then( dir => document.querySelector( 'html' ).setAttribute( 'dir', dir ) );
+            }
+
 
             // Remove loader. This will make the form visible.
             // In order to aggregate regular loadErrors and GoTo loaderrors,
@@ -626,8 +638,8 @@ function _setEventHandlers() {
     if ( formLanguages ) {
         formLanguages.addEventListener( events.Change().type, event => {
             event.preventDefault();
-            console.log( 'ready to set UI lang', form.langs.currentLang );
-            localize( document.querySelector( 'body' ), form.langs.currentLang )
+            console.log( 'ready to set UI lang', form.currentLanguage );
+            localize( document.querySelector( 'body' ), form.currentLanguage )
                 .then( dir => document.querySelector( 'html' ).setAttribute( 'dir', dir ) );
         } );
     }
