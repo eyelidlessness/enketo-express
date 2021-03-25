@@ -9,7 +9,7 @@ import { Form } from 'enketo-core';
 import downloadUtils from 'enketo-core/src/js/download-utils';
 import events from './event';
 import fileManager from './file-manager';
-import { t, localize, getCurrentUiLanguage } from './translator';
+import { t, localize, getCurrentUiLanguage, getBrowserLanguage } from './translator';
 import records from './records-queue';
 import $ from 'jquery';
 import encryptor from './encryptor';
@@ -41,26 +41,26 @@ function init( formEl, data, loadErrors = [] ) {
                 fileManager.setInstanceAttachments( data.instanceAttachments );
             }
 
-            // override default form language if ?lang= querystring was used
+            const langSelector = formEl.querySelector( '#form-languages' );
+            const formDefaultLanguage = langSelector.dataset.defaultLang;
+            const browserLanguage = getBrowserLanguage();
+
+            // Determine form language to load
             if ( settings.languageOverrideParameter ) {
                 formOptions.language = settings.languageOverrideParameter.value;
+            } else if ( !formDefaultLanguage && langSelector.querySelector( `[lang=${browserLanguage}]` ) ){
+                formOptions.language = browserLanguage;
             }
 
             form = new Form( formEl, data, formOptions );
             loadErrors = loadErrors.concat( form.init() );
 
-            // TODO: if no default form language is defined, switch form language to navigator language if possible
-            //if ( !form.defaultLanguage && form.languages.includes( /* extract of navigator language */ ) ){
-            // change form language....
-            // TODO: I think we may have to abandon this approach and out the default language in enketo-transformer instead
-            //}
-
+            // Determine whether UI language should be attempted to be switched.
             if ( getCurrentUiLanguage() !== form.currentLanguage )  {
                 console.log( 'changing UI language to', form.currentLanguage );
                 localize( document.querySelector( 'body' ), form.currentLanguage )
                     .then( dir => document.querySelector( 'html' ).setAttribute( 'dir', dir ) );
             }
-
 
             // Remove loader. This will make the form visible.
             // In order to aggregate regular loadErrors and GoTo loaderrors,
