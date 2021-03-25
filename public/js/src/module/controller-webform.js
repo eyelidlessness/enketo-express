@@ -48,7 +48,7 @@ function init( formEl, data, loadErrors = [] ) {
             // Determine form language to load
             if ( settings.languageOverrideParameter ) {
                 formOptions.language = settings.languageOverrideParameter.value;
-            } else if ( !formDefaultLanguage && langSelector.querySelector( `[lang=${browserLanguage}]` ) ){
+            } else if ( !formDefaultLanguage && langSelector.querySelector( `option[value="${browserLanguage}"]` ) ){
                 formOptions.language = browserLanguage;
             }
 
