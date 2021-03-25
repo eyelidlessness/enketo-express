@@ -68,7 +68,7 @@ const t = ( key, options ) => i18next.t( key, options );
  * Note, this does not work if there is translation context (i.e. options for t(key, options) call).
  *
  * @param {Element} container - The element to localize.
- * @param { string } [lng] - The 2-character IANA subtag.
+ * @param { string } [lng] - The 2-or-3-character IANA subtag.
  */
 const localize = ( container, lng ) => {
     const cache = {};

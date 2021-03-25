@@ -45,7 +45,7 @@ function init( formEl, data, loadErrors = [] ) {
             const formDefaultLanguage = langSelector.dataset.defaultLang;
             const browserLanguage = getBrowserLanguage();
 
-            // Determine form language to load
+            // Determine which form language to load
             if ( settings.languageOverrideParameter ) {
                 formOptions.language = settings.languageOverrideParameter.value;
             } else if ( !formDefaultLanguage && langSelector.querySelector( `option[value="${browserLanguage}"]` ) ){
@@ -56,8 +56,7 @@ function init( formEl, data, loadErrors = [] ) {
             loadErrors = loadErrors.concat( form.init() );
 
             // Determine whether UI language should be attempted to be switched.
-            if ( getCurrentUiLanguage() !== form.currentLanguage )  {
-                console.log( 'changing UI language to', form.currentLanguage );
+            if ( getCurrentUiLanguage() !== form.currentLanguage &&  /^[a-z]{2,3}/.test( form.currentLanguage ) )  {
                 localize( document.querySelector( 'body' ), form.currentLanguage )
                     .then( dir => document.querySelector( 'html' ).setAttribute( 'dir', dir ) );
             }
