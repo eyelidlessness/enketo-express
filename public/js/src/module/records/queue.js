@@ -34,10 +34,14 @@ function init() {
 }
 
 /**
+ * @typedef { import('../store').Record } Record
+ */
+
+/**
  * Obtains a record
  *
  * @param  { string } instanceId - instanceID of record
- * @return {Promise<*|undefined>} a Promise that resolves with a record object or undefined
+ * @return {Promise<Record | undefined>} a Promise that resolves with a record object or undefined
  */
 function get( instanceId ) {
     return store.record.get( instanceId );
@@ -46,7 +50,7 @@ function get( instanceId ) {
 /**
  * Stores a new record. Overwrites (media) files from auto-saved record.
  *
- * @param { object } record - a record object
+ * @param { Record } record - a record object
  * @return {Promise<undefined>} a promise that resolves with undefined
  */
 function set( record ) {
@@ -89,7 +93,7 @@ function set( record ) {
  * Updates an existing record
  *
  * @param  { object } record - a record object
- * @return { Promise } a promise that resolves with undefined
+ * @return { Promise<undefined> } a promise that resolves with undefined
  */
 function update( record ) {
     return store.record.update( record )
@@ -100,7 +104,7 @@ function update( record ) {
  * Removes a record
  *
  * @param { string } instanceId - instanceID of record
- * @return { Promise } a promise that resolves with undefined
+ * @return { Promise<undefined> } a promise that resolves with undefined
  */
 function remove( instanceId ) {
     return store.record.remove( instanceId )
@@ -124,7 +128,7 @@ function getAutoSavedRecord() {
 /**
  * Updates auto-saved record
  *
- * @param { object } record - record object created from the current state of the form
+ * @param { Record } record - record object created from the current state of the form
  */
 function updateAutoSavedRecord( record ) {
     // prevent this record from accidentally being submitted
@@ -363,7 +367,7 @@ uploadProgress = {
 /**
  * Updates the record list in the UI
  *
- * @return { Promise } [description]
+ * @return { Promise<undefined> } [description]
  */
 function _updateRecordList() {
     let $li;

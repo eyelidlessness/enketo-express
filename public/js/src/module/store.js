@@ -432,6 +432,18 @@ const dataStore = {
     }
 };
 
+/**
+ * @typedef Record - Enketo's data model representing an [XForms Instance](https://getodk.github.io/xforms-spec/#instance)
+ * @property { string } enketoId - identifier for the form the record is associated with
+ * @property { string } instanceId - the record's primary key identifier
+ * @property { string } name - a unique name assigned to the record by a user
+ * @property { string } xml - the serialized representation of the record's current state
+ * @property { string } [created] - when the record was created in the store
+ * @property { string } [updated] - when the record was most recently updated in the store
+ * @property { string } [deprecatedId] - deprecated (previous) ID of record
+ * @property { boolean } [draft] - whether the record was saved either as a draft or auto-saved
+ * @property { window.File[] } [files] - any files attached to the record
+ */
 
 const recordStore = {
     /**

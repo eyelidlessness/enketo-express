@@ -6,7 +6,7 @@ import settings from '../../../public/js/src/module/settings';
 import store from '../../../public/js/src/module/store';
 
 /**
- * @typedef Record { import('./store').Record }
+ * @typedef { import('../../../public/js/src/module/store').Record } Record
  */
 
 /**
