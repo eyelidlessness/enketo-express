@@ -65,6 +65,27 @@ function set( record ) {
 }
 
 /**
+ * Creates (sets) or updates a record.
+ *
+ * @param { 'set' | 'update' } action - determines whether to create or update the record
+ * @param { Record } record - the record to save
+ *
+ * @return { Promise<undefined> }
+ */
+ function save( action, record ) {
+    /** @type { Promise<Record> } */
+    let result;
+
+    if ( action === 'set' ) {
+        result = set( record );
+    } else {
+        result = store.record.update( record );
+    }
+
+    return result.then( _updateRecordList );
+}
+
+/**
  * Updates an existing record
  *
  * @param  { object } record - a record object
@@ -419,8 +440,7 @@ function flush() {
 export default {
     init,
     get,
-    set,
-    update,
+    save,
     remove,
     getAutoSavedKey,
     getAutoSavedRecord,
