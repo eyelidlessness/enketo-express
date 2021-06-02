@@ -443,6 +443,7 @@ const dataStore = {
  * @property { string } [deprecatedId] - deprecated (previous) ID of record
  * @property { boolean } [draft] - whether the record was saved either as a draft or auto-saved
  * @property { window.File[] } [files] - any files attached to the record
+ * @property { boolean } isEncrypted - whether the record is encrypted
  */
 
 const recordStore = {

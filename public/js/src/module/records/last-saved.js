@@ -25,9 +25,13 @@ function getLastSavedRecord( enketoId ) {
  * Sets the last-saved record.
  *
  * @param { Record } record - the record which was last saved
- * @return { Promise<{ lastSaved: Record; record: Record }> } - the last-saved record
+ * @return { Promise<{ lastSaved?: Record; record: Record }> } - the last-saved record
  */
 function setLastSavedRecord( record ) {
+    if ( record.isEncrypted ) {
+        return { record };
+    }
+
     const instanceId = getLastSavedInstanceId( record.enketoId );
 
     const lastSavedData = {

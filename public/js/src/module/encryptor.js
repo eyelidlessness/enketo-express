@@ -64,6 +64,7 @@ function encryptRecord( form, record ) {
             // overwrite record properties so it can be process as a regular submission
             record.xml = manifest.getXmlStr();
             record.files = blobs;
+            record.isEncrypted = true;
 
             return record;
         } );
