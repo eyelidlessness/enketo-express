@@ -3,7 +3,6 @@
  */
 
 import store from '../store';
-
 import connection from '../connection';
 import gui from '../gui';
 import events from '../event';
@@ -11,6 +10,7 @@ import settings from '../settings';
 import exporter from '../exporter';
 import { t } from '../translator';
 import $ from 'jquery';
+import lastSaved from './last-saved';
 
 let $exportButton;
 let $uploadButton;
@@ -18,7 +18,6 @@ let $recordList;
 let $queueNumber;
 let uploadProgress;
 let finalRecordPresent;
-const autoSaveKey = `__autoSave_${settings.enketoId}`;
 let uploadOngoing = false;
 
 function init() {
@@ -64,8 +63,7 @@ function set( record ) {
             }
 
             return store.record.set( record );
-        } )
-        .then( _updateRecordList );
+        } );
 }
 
 /**
@@ -76,7 +74,7 @@ function set( record ) {
  *
  * @return { Promise<undefined> }
  */
- function save( action, record ) {
+function save( action, record ) {
     /** @type { Promise<Record> } */
     let result;
 
@@ -86,7 +84,7 @@ function set( record ) {
         result = store.record.update( record );
     }
 
-    return result.then( _updateRecordList );
+    return result.then( lastSaved.setLastSavedRecord ).then( _updateRecordList );
 }
 
 /**
@@ -115,14 +113,14 @@ function remove( instanceId ) {
  * Obtains auto-saved record key
  */
 function getAutoSavedKey() {
-    return autoSaveKey;
+    return `__autoSave_${settings.enketoId}`;
 }
 
 /**
  * Obtains auto-saved record.
  */
 function getAutoSavedRecord() {
-    return get( autoSaveKey );
+    return get( getAutoSavedKey() );
 }
 
 /**
@@ -136,7 +134,7 @@ function updateAutoSavedRecord( record ) {
     // give an internal name
     record.name = `__autoSave_${Date.now()}`;
     // use the pre-defined key
-    record.instanceId = autoSaveKey;
+    record.instanceId = getAutoSavedKey();
     // make the record valid
     record.enketoId = settings.enketoId;
 
@@ -148,7 +146,7 @@ function updateAutoSavedRecord( record ) {
  * Removes auto-saved record
  */
 function removeAutoSavedRecord() {
-    return store.record.remove( autoSaveKey );
+    return store.record.remove( getAutoSavedKey() );
     // do not update recordList
 }
 
@@ -190,6 +188,30 @@ function _setUploadIntervals() {
 }
 
 /**
+ * Retrieves a list of records for the active form, excluding auto-saved
+ * and last-saved records. This was isolated from the `_updateRecordList`
+ * function to allow testing, and reused in `uploadQueue` to share the
+ * behavior.
+ *
+ * @param { string } enketoId - Form whose records to get
+ * @param { { finalOnly?: boolean } } [options] - Only included records that are 'final' (i.e. not 'draft')
+ * @return { Promise<Record[]> } - records to be displayed in the UI
+ */
+function getDisplayableRecordList( enketoId, options = {} ) {
+    const excludeInstanceIds = new Set( [
+        getAutoSavedKey(),
+        lastSaved.getLastSavedInstanceId( enketoId ),
+    ] );
+
+    const records = store.record.getAll( settings.enketoId, options.finalOnly )
+        .then( records => {
+            return records.filter( record => !excludeInstanceIds.has( record.instanceId ) );
+        } );
+
+    return records;
+}
+
+/**
  * Uploads all final records in the queue
  *
  * @return {Promise<undefined>} a Promise that resolves with undefined
@@ -213,7 +235,7 @@ function uploadQueue() {
                 return;
             }
 
-            return store.record.getAll( settings.enketoId, true );
+            return getDisplayableRecordList( settings.enketoId, { finalOnly: true } );
         } )
         .then( records => {
             if ( !records || records.length === 0 ) {
@@ -274,7 +296,8 @@ function uploadQueue() {
 }
 
 /**
- * Creates a zip file of all locally-saved records.
+ * Creates a zip file of all locally-saved records, including drafts and auto-saved
+ * records, excluding last-saved.
  *
  * @param { string } formTitle - the title of the form
  * @return {Promise<Blob>} a Promise that resolves with a zip file as Blob
@@ -283,7 +306,10 @@ function exportToZip( formTitle ) {
 
     $exportButton.prop( 'disabled', true );
 
-    return exporter.recordsToZip( settings.enketoId, formTitle )
+    return getDisplayableRecordList( settings.enketoId )
+        .then( records => {
+            return exporter.recordsToZip( settings.enketoId, formTitle, records );
+        } )
         .then( blob => {
             $exportButton.prop( 'disabled', false );
 
@@ -379,12 +405,12 @@ function _updateRecordList() {
     finalRecordPresent = false;
 
     // rebuild the list
-    return store.record.getAll( settings.enketoId )
+    return getDisplayableRecordList( settings.enketoId )
         .then( records => {
             records = records || [];
 
             // remove autoSaved record
-            records = records.filter( record => record.instanceId !== autoSaveKey );
+            records = records.filter( record => record.instanceId !== getAutoSavedKey() );
 
             // update queue number
             $queueNumber.text( records.length );
@@ -448,6 +474,7 @@ export default {
     remove,
     getAutoSavedKey,
     getAutoSavedRecord,
+    getDisplayableRecordList,
     updateAutoSavedRecord,
     removeAutoSavedRecord,
     flush,
