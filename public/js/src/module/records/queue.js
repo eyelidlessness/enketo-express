@@ -2,14 +2,14 @@
  * Deals with browser storage
  */
 
-import store from './store';
+import store from '../store';
 
-import connection from './connection';
-import gui from './gui';
-import events from './event';
-import settings from './settings';
-import exporter from './exporter';
-import { t } from './translator';
+import connection from '../connection';
+import gui from '../gui';
+import events from '../event';
+import settings from '../settings';
+import exporter from '../exporter';
+import { t } from '../translator';
 import $ from 'jquery';
 
 let $exportButton;

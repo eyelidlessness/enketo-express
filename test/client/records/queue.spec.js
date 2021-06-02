@@ -1,9 +1,9 @@
-import connection from '../../public/js/src/module/connection';
-import encryptor from '../../public/js/src/module/encryptor';
-import exporter from '../../public/js/src/module/exporter';
-import records from '../../public/js/src/module/records-queue';
-import settings from '../../public/js/src/module/settings';
-import store from '../../public/js/src/module/store';
+import connection from '../../../public/js/src/module/connection';
+import encryptor from '../../../public/js/src/module/encryptor';
+import exporter from '../../../public/js/src/module/exporter';
+import records from '../../../public/js/src/module/records/queue';
+import settings from '../../../public/js/src/module/settings';
+import store from '../../../public/js/src/module/store';
 
 /**
  * @typedef Record { import('./store').Record }

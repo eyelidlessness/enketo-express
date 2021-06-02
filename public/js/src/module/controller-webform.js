@@ -10,7 +10,7 @@ import downloadUtils from 'enketo-core/src/js/download-utils';
 import events from './event';
 import fileManager from './file-manager';
 import { t, localize, getCurrentUiLanguage, getBrowserLanguage } from './translator';
-import records from './records-queue';
+import records from './records/queue';
 import $ from 'jquery';
 import encryptor from './encryptor';
 
