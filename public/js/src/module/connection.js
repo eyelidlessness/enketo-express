@@ -5,6 +5,8 @@
 import settings from './settings';
 import { t } from './translator';
 import utils from './utils';
+import lastSaved from './records/last-saved';
+
 const parser = new DOMParser();
 const CONNECTION_URL = `${settings.basePath}/connection`;
 const TRANSFORM_URL = `${settings.basePath}/transform/xform${settings.enketoId ? `/${settings.enketoId}` : ''}`;
@@ -29,13 +31,18 @@ function getOnlineStatus() {
         .catch( () => false );
 }
 
-/*
+/**
+ * @typedef { import('./store').Record } Record
+ */
+
+/**
  * Uploads a complete record
  *
- * @param  {{xml: string, files: [File]}} record
+ * @param  { Record } record - the record to upload
+ * @param  { { isLastSaved?: boolean } } options - whether this was the most recently saved record
  * @return { Promise }
  */
-function uploadRecord( record ) {
+function uploadRecord( record, options = {} ) {
     let batches;
 
     try {
@@ -44,19 +51,28 @@ function uploadRecord( record ) {
         return Promise.reject( e );
     }
 
-    batches.forEach( batch => {
-        batch.instanceId = record.instanceId;
-        batch.deprecatedId = record.deprecatedId;
-    } );
+    /**  */
+    let promise;
+
+    if ( options.isLastSaved ) {
+        promise = lastSaved.setLastSavedRecord( record );
+    } else {
+        promise = Promise.resolve( record );
+    }
 
     // Perform batch uploads sequentially for to avoid issues when connections are very poor and
     // a serious issue with ODK Aggregate (https://github.com/kobotoolbox/enketo-express/issues/400)
-    return batches.reduce( ( prevPromise, batch ) => prevPromise.then( () => _uploadBatch( batch ) ), Promise.resolve() )
-        .then( results => {
-            console.log( 'results of all batches submitted', results );
+    return promise.then( () => {
+        return batches.reduce( ( prevPromise, batch ) => {
+            return prevPromise.then( results => {
+                return _uploadBatch( batch ).then( result => {
+                    results.push( result );
 
-            return results[ 0 ];
-        } );
+                    return results;
+                } );
+            } );
+        }, Promise.resolve( [] ) );
+    } ).then( results => results[ 0 ] );
 }
 
 /**
@@ -182,15 +198,16 @@ function _prepareFormDataArray( record ) {
     console.log( `splitting record into ${batches.length} batches to reduce submission size `, batches );
 
     batches.forEach( batch => {
-        let batchPrepped;
         const fd = new FormData();
 
         fd.append( 'xml_submission_file', xmlSubmissionBlob, 'xml_submission_file' );
         const csrfToken = ( document.cookie.split( '; ' ).find( c => c.startsWith( '__csrf' ) ) || '' ).split( '=' )[1];
         if ( csrfToken ) fd.append( '__csrf', csrfToken );
 
-        // batch with XML data
-        batchPrepped = {
+        // batch with XML and record data
+        let batchPrepped = {
+            instanceId: record.instanceId,
+            deprecatedId: record.deprecatedId,
             formData: fd,
             failedFiles
         };

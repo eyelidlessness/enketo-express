@@ -274,7 +274,9 @@ function _submitRecord() {
                 return record;
             }
         } )
-        .then( connection.uploadRecord )
+        .then( record => {
+            return connection.uploadRecord( record, { isLastSaved: true } );
+        } )
         .then( result => {
             result = result || {};
             level = 'success';
