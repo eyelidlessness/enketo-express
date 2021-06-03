@@ -9,6 +9,7 @@ import utils from './module/utils';
 import events from './module/event';
 import formCache from './module/form-cache';
 import applicationCache from './module/application-cache';
+import records from './module/records/queue';
 
 const loader = document.querySelector( '.main-loader' );
 const formheader = document.querySelector( '.main > .paper > .form-header' );
@@ -43,7 +44,9 @@ if ( settings.offline ) {
         .catch( _showErrorOrAuthenticate );
 } else {
     console.log( 'App in online-only mode.' );
-    initTranslator( survey )
+    store.init()
+        .then( records.init )
+        .then( () => initTranslator( survey ) )
         .then( connection.getFormParts )
         .then( _swapTheme )
         .then( _addBranding )

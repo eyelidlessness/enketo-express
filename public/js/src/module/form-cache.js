@@ -7,11 +7,13 @@ import events from './event';
 import settings from './settings';
 import connection from './connection';
 import assign from 'lodash/assign';
+import records from './records/queue';
 
 let hash;
 
 function init( survey ) {
     return store.init()
+        .then( records.init )
         .then( () => get( survey ) )
         .then( result => {
             if ( result ) {

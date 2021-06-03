@@ -51,7 +51,7 @@ function uploadRecord( record, options = {} ) {
         return Promise.reject( e );
     }
 
-    /**  */
+    /** @type { Promise<Record> } */
     let promise;
 
     if ( options.isLastSaved ) {
@@ -387,7 +387,17 @@ function _getExternalData( survey ) {
 
         survey.externalData
             .forEach( ( instance, index ) => {
-                tasks.push( _getDataFile( instance.src, survey.languageMap )
+                /** @type {Promise<XMLDocument>} */
+                let request;
+
+                if ( instance.src === lastSaved.LAST_SAVED_VIRTUAL_ENDPOINT ) {
+                    request = lastSaved.getLastSavedRecord( survey.enketoId )
+                        .then( ( { xml } ) => parser.parseFromString( xml, 'text/xml' ) );
+                } else {
+                    request = _getDataFile( instance.src, survey.languageMap );
+                }
+
+                tasks.push( request
                     .then( xmlData => {
                         instance.xml = xmlData;
 

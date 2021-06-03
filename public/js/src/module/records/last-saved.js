@@ -1,5 +1,7 @@
 import store from '../store';
 
+const LAST_SAVED_VIRTUAL_ENDPOINT = 'jr://instance/last-saved';
+
 /**
  * @typedef { import('../store').Record } Record
  */
@@ -55,5 +57,6 @@ function setLastSavedRecord( record ) {
 export default {
     getLastSavedInstanceId,
     getLastSavedRecord,
+    LAST_SAVED_VIRTUAL_ENDPOINT,
     setLastSavedRecord,
 };

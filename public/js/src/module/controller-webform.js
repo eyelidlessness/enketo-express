@@ -256,10 +256,11 @@ function _submitRecord() {
     return fileManager.getCurrentFiles()
         .then( files => {
             const record = {
-                'xml': form.getDataStr( include ),
-                'files': files,
-                'instanceId': form.instanceID,
-                'deprecatedId': form.deprecatedID
+                enketoId: settings.enketoId,
+                xml: form.getDataStr( include ),
+                files: files,
+                instanceId: form.instanceID,
+                deprecatedId: form.deprecatedID
             };
 
             if ( form.encryptionKey ) {

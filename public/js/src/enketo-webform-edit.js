@@ -4,6 +4,9 @@ import settings from './module/settings';
 import connection from './module/connection';
 import { init as initTranslator, t, localize } from './module/translator';
 import utils from './module/utils';
+import records from './module/records/queue';
+import store from './module/store';
+
 const loader = document.querySelector( '.main-loader' );
 const formheader = document.querySelector( '.main > .paper > .form-header' );
 const survey = {
@@ -12,7 +15,9 @@ const survey = {
 };
 const range = document.createRange();
 
-initTranslator( survey )
+store.init()
+    .then( records.init )
+    .then( () => initTranslator( survey ) )
     .then( survey => Promise.all( [
         connection.getFormParts( survey ),
         connection.getExistingInstance( survey )
