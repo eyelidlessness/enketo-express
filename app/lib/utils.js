@@ -6,6 +6,7 @@ const crypto = require( 'crypto' );
 const config = require( '../models/config-model' ).server;
 const EVP_BytesToKey = require( 'evp_bytestokey' );
 const validUrl = require( 'valid-url' );
+const transformer = require( 'enketo-transformer' );
 // var debug = require( 'debug' )( 'utils' );
 
 /**
@@ -230,9 +231,25 @@ function areOwnPropertiesEqual( a, b ) {
 function toLocalMediaUrl( url ) {
     const localUrl = `${config[ 'base path' ]}/media/get/${url.replace( /(https?):\/\//, '$1/' )}`;
 
-    return localUrl;
+    return transformer.escapeURLPath( localUrl );
 }
 
+/**
+ * @typedef ManifestItem
+ * @property {string} filename
+ * @property {string} hash
+ * @property {string} downloadUrl
+ */
+
+/**
+ * @param {ManifestItem[]} manifest
+ * @return {Record<string, string>}
+ */
+const toMediaMap = ( manifest ) => Object.fromEntries(
+    manifest.map( ( { filename, downloadUrl } ) => (
+        [ filename, toLocalMediaUrl( downloadUrl ) ]
+    ) )
+);
 
 module.exports = {
     getOpenRosaKey,
@@ -245,5 +262,6 @@ module.exports = {
     areOwnPropertiesEqual,
     insecureAes192Decrypt,
     insecureAes192Encrypt,
-    toLocalMediaUrl
+    toLocalMediaUrl,
+    toMediaMap,
 };
