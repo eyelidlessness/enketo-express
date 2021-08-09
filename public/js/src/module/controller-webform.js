@@ -182,16 +182,17 @@ function _checkAutoSavedRecord() {
  *
  * @param {Survey} survey
  * @param {ResetFormOptions} [options]
+ * @return {Promise<void>}
  */
-function _resetForm( survey, options ) {
-    return formCache.get( survey )
-        .then( ( survey ) => {
+function _resetForm( survey, options = {} ) {
+    return getLastSavedRecord( survey.enketoId )
+        .then( lastSavedRecord => populateLastSavedInstances( survey, lastSavedRecord ) )
+        .then( survey => {
             const formEl = form.resetView();
 
             form = new Form( formEl, {
                 modelStr: formData.modelStr,
                 external: survey.externalData,
-                lastSavedRecord: survey.lastSavedRecord,
             }, formOptions );
 
             const loadErrors = form.init();
@@ -209,9 +210,7 @@ function _resetForm( survey, options ) {
             if ( loadErrors.length > 0 ) {
                 gui.alertLoadErrors( loadErrors );
             }
-
         } );
-
 }
 
 /**
