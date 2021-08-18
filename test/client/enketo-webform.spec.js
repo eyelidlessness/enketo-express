@@ -533,7 +533,18 @@ describe( 'Enketo webform app', () => {
 
                 await offlineInitialization;
 
-                expect( performedSteps ).to.deep.equal( steps );
+                for ( const [ expectedIndex, expectedStep ] of steps.entries() ) {
+                    const step = performedSteps.find( performedStep => {
+                        return performedStep === expectedStep;
+                    } );
+                    const index = performedSteps.indexOf( expectedStep );
+
+                    expect( step ).to.equal( expectedStep );
+                    expect( index, `Unexpected order of step ${expectedStep.options.description}` )
+                        .to.equal( expectedIndex );
+                }
+
+                expect( performedSteps.length ).to.equal( steps.length );
             } );
         } );
 
@@ -726,7 +737,18 @@ describe( 'Enketo webform app', () => {
 
                 await onlineInitialization;
 
-                expect( performedSteps ).to.deep.equal( steps );
+                for ( const [ expectedIndex, expectedStep ] of steps.entries() ) {
+                    const step = performedSteps.find( performedStep => {
+                        return performedStep === expectedStep;
+                    } );
+                    const index = performedSteps.indexOf( expectedStep );
+
+                    expect( step ).to.equal( expectedStep );
+                    expect( index, `Unexpected order of step ${expectedStep.options.description}` )
+                        .to.equal( expectedIndex );
+                }
+
+                expect( performedSteps.length ).to.equal( steps.length );
             } );
         } );
     } );
