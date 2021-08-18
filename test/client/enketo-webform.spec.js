@@ -654,15 +654,6 @@ describe( 'Enketo webform app', () => {
                     } ),
                     // End of additional form caching workarounds.
 
-                    prepareInitStep( {
-                        description: 'Swap theme',
-                        stubMethod: 'callsFake',
-                        object: gui,
-                        key: 'swapTheme',
-                        expectedArgs: [ onlineSurvey ],
-                        returnValue: Promise.resolve( onlineSurvey ),
-                    } ),
-
                     // While there is currently a truthiness check on the query result,
                     // there is a subsequent access outside that check.
                     prepareInitStep( {
@@ -674,6 +665,14 @@ describe( 'Enketo webform app', () => {
                         returnValue: document.createElement( 'img' ),
                     } ),
 
+                    prepareInitStep( {
+                        description: 'Swap theme',
+                        stubMethod: 'callsFake',
+                        object: gui,
+                        key: 'swapTheme',
+                        expectedArgs: [ onlineSurvey ],
+                        returnValue: Promise.resolve( onlineSurvey ),
+                    } ),
                     prepareInitStep( {
                         description: 'Get max submission size',
                         stubMethod: 'callsFake',
