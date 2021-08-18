@@ -1,7 +1,7 @@
 // Karma configuration
 // Generated on Wed Nov 26 2014 15:52:30 GMT-0700 (MST)
 
-
+const exportPrivate = require( '../../build-tools/esbuild-plugin-export-private' );
 
 module.exports = config => {
     config.set( {
@@ -12,7 +12,7 @@ module.exports = config => {
 
         // frameworks to use
         // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
-        frameworks: [ 'mocha', 'sinon-chai' ],
+        frameworks: [ 'source-map-support', 'mocha', 'sinon-chai' ],
 
 
         // list of files / patterns to load in the browser
@@ -29,14 +29,20 @@ module.exports = config => {
         // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
         preprocessors: {
             'public/js/**/!(enketo-offline-fallback).js': [ 'esbuild' ],
+            'config/*.json': [ 'esbuild' ],
             'test/client/**/*.js': [ 'esbuild' ],
         },
 
         esbuild: {
-            // TODO [2021-08-01]: this fixes an issue with the `Object.fromEntries` polyfill, remove when CI is able to use a newer version
             define: {
-                global: 'window',
+                // TODO [2021-08-01]: this fixes an issue with the `Object.fromEntries` polyfill, remove when CI is able to use a newer version
+                global: 'window', globalThis: 'window',
+                DEBUG: 'true',
+                ENV: JSON.stringify( 'test' ),
             },
+            plugins: [
+                exportPrivate(),
+            ],
             // TODO [2021-08-01]: target more up to date version when CI is able to use a newer verison of Chrome
             target: [
                 'chrome51',
