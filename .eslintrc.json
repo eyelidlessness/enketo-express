@@ -1,10 +1,11 @@
 {
     "env": {
-        "es6": true,
+        "es2020": true,
         "browser": true,
         "commonjs": true
     },
     "globals": {
+        "ENV": true,
         "Promise": true
     },
     "extends": "eslint:recommended",
@@ -14,7 +15,7 @@
     ],
     "parserOptions": {
         "sourceType": "module",
-        "ecmaVersion": 8
+        "allowImportExportEverywhere": true
     },
     "settings": {
         "jsdoc": {
@@ -31,7 +32,11 @@
         "no-console": ["warn", { "allow": ["error", "deprecate", "warn"] }],
         "eol-last": ["error", "always"],
         "padding-line-between-statements": ["warn", { "blankLine": "always", "prev": "*", "next": "return" }],
-        "space-before-function-paren": ["error", "never"],
+        "space-before-function-paren": ["error", {
+            "anonymous": "never",
+            "asyncArrow": "always",
+            "named": "never"
+        }],
         "space-in-parens": ["error", "always"],
         "space-infix-ops": "error",
         "array-bracket-spacing": ["error", "always"],

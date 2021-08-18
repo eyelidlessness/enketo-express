@@ -11,10 +11,15 @@ const entryPoints = pkg.entries.map( entry => (
     path.resolve( cwd, entry )
 ) );
 
-const isProduction = process.env.NODE_ENV === 'production';
+const { NODE_ENV = 'develop' } = process.env;
+const isProduction = NODE_ENV === 'production';
 
 esbuild.build( {
     bundle: true,
+    define: {
+        DEBUG: 'false',
+        ENV: JSON.stringify( NODE_ENV ),
+    },
     entryPoints,
     format: 'iife',
     minify: isProduction,

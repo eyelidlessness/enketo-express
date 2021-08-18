@@ -1,3 +1,4 @@
+import { memoize } from 'lodash';
 import settings from './settings';
 import i18next from 'i18next';
 import HttpApi from 'i18next-http-backend';
@@ -23,40 +24,39 @@ const htmlParagraphsPostProcessor = {
  * @param  {=*?} something - can be anything
  * @return { Promise }       promise resolving the original something argument
  */
-const init = something => initialize
-    .then( () => something );
-
-const initialize = new Promise( ( resolve, reject ) => {
-    i18next
-        .use( HttpApi )
-        .use( LanguageDetector )
-        .use( htmlParagraphsPostProcessor )
-        .init( {
-            whitelist: settings.languagesSupported,
-            fallbackLng: 'en',
-            joinArrays: '\n',
-            backend: {
-                loadPath: LOADPATH,
-            },
-            load: 'languageOnly',
-            lowerCaseLng: true,
-            detection: {
-                order: [ 'querystring', 'navigator' ],
-                lookupQuerystring: 'lang',
-                caches: false
-            },
-            interpolation: {
-                prefix: '__',
-                suffix: '__'
-            },
-            postProcess: [ 'htmlParagraphsPostProcessor' ]
-        }, error => {
-            if ( error ) {
-                reject( error );
-            } else {
-                resolve();
-            }
-        } );
+const init = memoize( something => {
+    return new Promise( ( resolve, reject ) => {
+        i18next
+            .use( HttpApi )
+            .use( LanguageDetector )
+            .use( htmlParagraphsPostProcessor )
+            .init( {
+                whitelist: settings.languagesSupported,
+                fallbackLng: 'en',
+                joinArrays: '\n',
+                backend: {
+                    loadPath: LOADPATH,
+                },
+                load: 'languageOnly',
+                lowerCaseLng: true,
+                detection: {
+                    order: [ 'querystring', 'navigator' ],
+                    lookupQuerystring: 'lang',
+                    caches: false
+                },
+                interpolation: {
+                    prefix: '__',
+                    suffix: '__'
+                },
+                postProcess: [ 'htmlParagraphsPostProcessor' ]
+            }, error => {
+                if ( error ) {
+                    reject( error );
+                } else {
+                    resolve( something );
+                }
+            } );
+    } );
 } );
 
 const t = ( key, options ) => i18next.t( key, options );
