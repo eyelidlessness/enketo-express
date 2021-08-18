@@ -21,11 +21,17 @@ const range = document.createRange();
 
 _setEmergencyHandlers();
 
-if ( settings.offline ) {
+/**
+ * @param {Survey} survey
+ */
+function _initOffline( survey ) {
     console.log( 'App in offline-capable mode.' );
+
     delete survey.xformUrl;
+
     _setAppCacheEventHandlers();
-    applicationCache.init( survey )
+
+    return applicationCache.init( survey )
         .then( initTranslator )
         .then( formCache.init )
         .then( _addBranding )
@@ -41,9 +47,15 @@ if ( settings.offline ) {
         .then( formCache.updateMedia )
         .then( _setFormCacheEventHandlers )
         .catch( _showErrorOrAuthenticate );
-} else {
+}
+
+/**
+ * @param {Survey} survey
+ */
+function _initOnline( survey ) {
     console.log( 'App in online-only mode.' );
-    store.init()
+
+    return store.init()
         .then( () => initTranslator( survey ) )
         .then( connection.getFormParts )
         .then( _swapTheme )
@@ -52,6 +64,14 @@ if ( settings.offline ) {
         .then( _updateMaxSizeSetting )
         .then( _init )
         .catch( _showErrorOrAuthenticate );
+}
+
+if ( ENV !== 'test' ) {
+    if ( settings.offline ) {
+        _initOffline( survey );
+    } else {
+        _initOnline( survey );
+    }
 }
 
 function _updateMaxSizeSetting( survey ) {
