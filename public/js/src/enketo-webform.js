@@ -10,8 +10,13 @@ import events from './module/event';
 import formCache from './module/form-cache';
 import applicationCache from './module/application-cache';
 
+/**
+ * @typedef {import('../../../app/models/survey-model').SurveyObject} Survey
+ */
+
 const loader = document.querySelector( '.main-loader' );
-const formheader = document.querySelector( '.main > .paper > .form-header' );
+const FORM_HEADER_SELECTOR = '.main > .paper > .form-header';
+const formheader = document.querySelector( FORM_HEADER_SELECTOR );
 const survey = {
     enketoId: settings.enketoId,
     xformUrl: settings.xformUrl,
@@ -74,6 +79,9 @@ if ( ENV !== 'test' ) {
     }
 }
 
+/**
+ * @param {Survey} survey
+ */
 function _updateMaxSizeSetting( survey ) {
     if ( survey.maxSize ) {
         // overwrite default max size
@@ -159,7 +167,8 @@ const BRAND_IMAGE_SELECTOR = '.form-header__branding img';
 /**
  * Adds/replaces branding if necessary, and unhides branding.
  *
- * @param { object } survey - [description]
+ * @param { Survey } survey
+ * @return { Survey }
  */
 function _addBranding( survey ) {
     const brandImg = document.querySelector( BRAND_IMAGE_SELECTOR );
@@ -180,8 +189,8 @@ function _addBranding( survey ) {
 /**
  * Swaps the theme if necessary.
  *
- * @param  { object } survey - [description]
- * @return { object }        [description]
+ * @param  { Survey } survey
+ * @return { Promise<Survey> }
  */
 function _swapTheme( survey ) {
     if ( survey.form && survey.model ) {
@@ -221,6 +230,10 @@ function _prepareInstance( modelStr, defaults ) {
     return model.getStr();
 }
 
+/**
+ * @param {Survey} formParts
+ * @return {Promise<Survey>}
+ */
 function _init( formParts ) {
     const formFragment = range.createContextualFragment( formParts.form );
     formheader.after( formFragment );
