@@ -837,7 +837,7 @@ function _updateFile( table, id, file ) {
 /**
  * Completely remove the database (no db.js function for this yet)
  *
- * @return { object } [description]
+ * @return { Promise<void> } [description]
  */
 function flush() {
     let request;
