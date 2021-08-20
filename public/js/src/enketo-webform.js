@@ -104,18 +104,22 @@ function _updateMaxSizeSetting( survey ) {
     reload: location.reload.bind( location ),
 };
 
+const LOAD_ERROR_CLASS = 'fail';
+const LOAD_ERROR_ENTRY_ADVICE = 'alert.loaderror.entryadvice';
+const LOAD_ERROR_UNKNOWN = 'error.unknown';
+
 function _showErrorOrAuthenticate( error ) {
     error = ( typeof error === 'string' ) ? new Error( error ) : error;
-    loader.classList.add( 'fail' );
+    loader.classList.add( LOAD_ERROR_CLASS );
 
     if ( error.status === 401 ) {
         _location.href = `${settings.loginUrl}?return_url=${encodeURIComponent( _location.href )}`;
     } else {
         if ( !Array.isArray( error ) ) {
-            error = [ error.message  || t( 'error.unknown' ) ];
+            error = [ error.message  || t( LOAD_ERROR_UNKNOWN ) ];
         }
 
-        gui.alertLoadErrors( error,  t( 'alert.loaderror.entryadvice' ) );
+        gui.alertLoadErrors( error,  t( LOAD_ERROR_ENTRY_ADVICE ) );
     }
 }
 
