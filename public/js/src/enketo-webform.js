@@ -119,6 +119,9 @@ function _showErrorOrAuthenticate( error ) {
     }
 }
 
+const APP_UPDATED_MSG = 'alert.appupdated.msg';
+const APP_UPDATED_HEADING = 'alert.appupdated.heading';
+
 function _setAppCacheEventHandlers() {
 
     document.addEventListener( events.OfflineLaunchCapable().type, event => {
@@ -134,7 +137,7 @@ function _setAppCacheEventHandlers() {
     } );
 
     document.addEventListener( events.ApplicationUpdated().type, () => {
-        gui.feedback( t( 'alert.appupdated.msg' ), 20, t( 'alert.appupdated.heading' ) );
+        gui.feedback( t( APP_UPDATED_MSG ), 20, t( APP_UPDATED_HEADING ) );
     } );
 }
 

@@ -3,7 +3,7 @@ import lodash from 'lodash';
 import applicationCache from '../../public/js/src/module/application-cache';
 import connection from '../../public/js/src/module/connection';
 import controller from '../../public/js/src/module/controller-webform';
-import event from '../../public/js/src/module/event';
+import events from '../../public/js/src/module/event';
 import formCache from '../../public/js/src/module/form-cache';
 import gui from '../../public/js/src/module/gui';
 import settings from '../../public/js/src/module/settings';
@@ -405,14 +405,14 @@ describe( 'Enketo webform app', () => {
                         stubMethod: 'callsFake',
                         object: document,
                         key: 'addEventListener',
-                        expectedArgs: [ event.OfflineLaunchCapable().type, expectFunction ],
+                        expectedArgs: [ events.OfflineLaunchCapable().type, expectFunction ],
                     } ),
                     prepareInitStep( {
                         description: 'Application update event listener',
                         stubMethod: 'callsFake',
                         object: document,
                         key: 'addEventListener',
-                        expectedArgs: [ event.ApplicationUpdated().type, expectFunction ],
+                        expectedArgs: [ events.ApplicationUpdated().type, expectFunction ],
                     } ),
                     prepareInitStep( {
                         description: 'Initialize application cache',
@@ -533,7 +533,7 @@ describe( 'Enketo webform app', () => {
                         stubMethod: 'callsFake',
                         object: document,
                         key: 'addEventListener',
-                        expectedArgs: [ event.FormUpdated().type, expectTypeof( 'function' ) ],
+                        expectedArgs: [ events.FormUpdated().type, expectTypeof( 'function' ) ],
                     } ),
                 ];
 
@@ -1217,6 +1217,138 @@ describe( 'Enketo webform app', () => {
                     ...survey,
 
                     languages: controllerFormLanguages,
+                } );
+            } );
+        } );
+
+        describe( 'application cache event handlers', () => {
+            describe( 'offline launch capable events', () => {
+                const serviceWorkerVersion = '1.2.3-d34db33-b4dfac3';
+
+                /** @type {string | null} */
+                let serviceWorkerScriptUrl;
+
+                /** @type {Stub} */
+                let updateOfflineCapableStub;
+
+                /** @type {Stub} */
+                let getServiceWorkerVersionStub;
+
+                /** @type {Promise<string> | null} */
+                let getServiceWorkerVersionPromise;
+
+                /** @type {Stub} */
+                let updateApplicationVersionStub;
+
+                /** @type {Promise<any> | null} */
+                let updateApplicationVersionPromise;
+
+                beforeEach( () => {
+                    serviceWorkerScriptUrl = null;
+
+                    updateOfflineCapableStub = sandbox.stub( gui.updateStatus, 'offlineCapable' ).returns( null );
+
+                    sandbox.stub( applicationCache, 'serviceWorkerScriptUrl' ).get( () => {
+                        return serviceWorkerScriptUrl;
+                    } );
+
+                    getServiceWorkerVersionPromise = null;
+
+                    getServiceWorkerVersionStub = sandbox.stub( connection, 'getServiceWorkerVersion' )
+                        .callsFake( () => {
+                            getServiceWorkerVersionPromise = Promise.resolve(
+                                serviceWorkerVersion
+                            );
+
+                            return getServiceWorkerVersionPromise;
+                        } );
+
+                    updateApplicationVersionPromise = null;
+
+                    updateApplicationVersionStub = sandbox.stub( gui.updateStatus, 'applicationVersion' )
+                        .callsFake( () => {
+                            updateApplicationVersionPromise = Promise.resolve();
+                        } );
+                } );
+
+                afterEach( async () => {
+                    await getServiceWorkerVersionPromise;
+                    await updateApplicationVersionPromise;
+                } );
+
+                it( 'updates the GUI to reflect that offline launch is available', async () => {
+                    webformPrivate._setAppCacheEventHandlers();
+
+                    const event = events.OfflineLaunchCapable( {
+                        capable: true,
+                    } );
+
+                    document.dispatchEvent( event );
+
+                    expect( updateOfflineCapableStub ).to.have.been.calledWith( true );
+                } );
+
+                it( 'updates the GUI to reflect that offline launch is not available', async () => {
+                    webformPrivate._setAppCacheEventHandlers();
+
+                    const event = events.OfflineLaunchCapable( {
+                        capable: false,
+                    } );
+
+                    document.dispatchEvent( event );
+
+                    expect( updateOfflineCapableStub ).to.have.been.calledWith( false );
+                } );
+
+                it( 'updates the GUI to reflect the service worker version', async () => {
+                    serviceWorkerScriptUrl = 'https://example.com/worker.js';
+
+                    webformPrivate._setAppCacheEventHandlers();
+
+                    const event = events.OfflineLaunchCapable( {
+                        capable: false,
+                    } );
+
+                    document.dispatchEvent( event );
+
+                    await getServiceWorkerVersionPromise;
+                    await updateApplicationVersionPromise;
+
+                    expect( updateApplicationVersionStub ).to.have.been.calledWith( serviceWorkerVersion );
+                } );
+
+                it( 'does not updates the GUI to reflect the service worker version if no service worker script is available', async () => {
+                    webformPrivate._setAppCacheEventHandlers();
+
+                    const event = events.OfflineLaunchCapable( {
+                        capable: false,
+                    } );
+
+                    document.dispatchEvent( event );
+
+                    await getServiceWorkerVersionPromise;
+                    await updateApplicationVersionPromise;
+
+                    expect( getServiceWorkerVersionStub ).not.to.have.been.called;
+                    expect( updateApplicationVersionStub ).not.to.have.been.called;
+                } );
+            } );
+
+            describe( 'application updated events', () => {
+                it( 'provides GUI feedback when the application has been updated', () => {
+                    const feedbackStub = sandbox.stub( gui, 'feedback' ).returns();
+
+                    sandbox.stub( i18next, 't' ).returnsArg( 0 );
+
+                    const event = events.ApplicationUpdated();
+
+                    document.dispatchEvent( event );
+
+                    expect( feedbackStub ).to.have.been.calledWith(
+                        webformPrivate.APP_UPDATED_MSG,
+                        20,
+                        webformPrivate.APP_UPDATED_HEADING
+                    )
                 } );
             } );
         } );
