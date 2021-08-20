@@ -64,6 +64,9 @@ describe( 'Enketo webform app', () => {
     /** @type {HTMLElement} */
     let mainElement = null;
 
+    /** @type {HTMLElement} */
+    let loaderElement = null;
+
     before( async () => {
         const formHeader = document.querySelector( '.form-header' );
 
@@ -75,11 +78,13 @@ describe( 'Enketo webform app', () => {
                         <div class="form-header"></div>
                     </div>
                 </div>
+                <div class="main-loader"></div>
             `, 'text/html' );
 
             mainElement = formDOM.documentElement.querySelector( '.main' );
+            loaderElement = formDOM.documentElement.querySelector( '.main-loader' );
 
-            document.body.appendChild( mainElement );
+            document.body.append( mainElement, loaderElement );
         }
 
         const { _PRIVATE_TEST_ONLY_ } = await import( '../../public/js/src/enketo-webform' );
@@ -780,6 +785,8 @@ describe( 'Enketo webform app', () => {
                 theme: 'kobo',
                 xformUrl: 'https://example.com/form.xml',
             };
+
+            sandbox.stub( i18next, 't' ).returnsArg( 0 );
         } );
 
         describe( 'emergency handlers', () => {
@@ -889,8 +896,6 @@ describe( 'Enketo webform app', () => {
 
                     return flushPromise;
                 } );
-
-                sandbox.stub( i18next, 't' ).returnsArg( 0 );
 
                 webformPrivate._setEmergencyHandlers();
             } );
@@ -1387,8 +1392,6 @@ describe( 'Enketo webform app', () => {
                 it( 'provides GUI feedback when the application has been updated', () => {
                     const feedbackStub = sandbox.stub( gui, 'feedback' ).returns();
 
-                    sandbox.stub( i18next, 't' ).returnsArg( 0 );
-
                     const event = events.ApplicationUpdated();
 
                     document.dispatchEvent( event );
@@ -1408,8 +1411,6 @@ describe( 'Enketo webform app', () => {
 
                 webformPrivate._setFormCacheEventHandlers();
 
-                sandbox.stub( i18next, 't' ).returnsArg( 0 );
-
                 const event = events.FormUpdated();
 
                 document.dispatchEvent( event );
@@ -1418,6 +1419,110 @@ describe( 'Enketo webform app', () => {
                     webformPrivate.FORM_UPDATED_MSG,
                     20,
                     webformPrivate.FORM_UPDATED_HEADING
+                );
+            } );
+        } );
+
+        describe( 'error handling', () => {
+            class StatusError extends Error {
+                /**
+                 * @param {number} status
+                 */
+                constructor( status ) {
+                    super( `HTTP Error: ${status}` );
+
+                    this.status = status;
+                }
+            }
+
+            const loginURL = 'https://example.com/login';
+            const initialURL = 'https://example.com/-/x/f33db33f';
+
+            /** @type {Stub} */
+            let addLoaderClassStub;
+
+            /** @type {string} */
+            let currentURL;
+
+            /** @type {Stub} */
+            let redirectStub;
+
+            /** @type {loadErrorsStub} */
+            let loadErrorsStub;
+
+            beforeEach( () => {
+                sandbox.stub( settings, 'loginUrl' ).get( () => loginURL );
+
+                addLoaderClassStub = sandbox.stub( loaderElement.classList, 'add' ).returns();
+
+                currentURL = 'https://example.com/-/x/f33db33f';
+                redirectStub = sandbox.stub( webformPrivate._location, 'href' );
+
+                redirectStub.get( () => currentURL );
+
+                redirectStub.set( redirectLocation => {
+                    currentURL = redirectLocation;
+                } );
+
+
+                loadErrorsStub = sandbox.stub( gui, 'alertLoadErrors' ).returns();
+            } );
+
+            it( 'indicates failure on the loading indicator', () => {
+                const error = new Error( 'bummer' );
+
+                webformPrivate._showErrorOrAuthenticate( error );
+
+                expect( addLoaderClassStub ).to.have.been.calledWith( webformPrivate.LOAD_ERROR_CLASS );
+            } );
+
+            it( 'redirects to a login page on authorization failure', () => {
+                const error = new StatusError( 401 );
+
+                webformPrivate._showErrorOrAuthenticate( error );
+
+                expect( currentURL ).to.equal( `${loginURL}?return_url=${encodeURIComponent( initialURL )}` );
+                expect( loadErrorsStub ).not.to.have.been.called;
+            } );
+
+            it( 'does not redirect to a login page for other network errors', () => {
+                const error = new StatusError( 404 );
+
+                webformPrivate._showErrorOrAuthenticate( error );
+
+                expect( currentURL ).to.equal( initialURL );
+            } );
+
+            it( 'alerts a loading error message', () => {
+                const error = new Error( 'oops!' );
+
+                webformPrivate._showErrorOrAuthenticate( error );
+
+                expect( loadErrorsStub ).to.have.been.calledWith(
+                    [ error.message ],
+                    webformPrivate.LOAD_ERROR_ENTRY_ADVICE
+                );
+            } );
+
+            it( 'alerts an unknown error message', () => {
+                const error = new Error();
+
+                webformPrivate._showErrorOrAuthenticate( error );
+
+                expect( loadErrorsStub ).to.have.been.calledWith(
+                    [ webformPrivate.LOAD_ERROR_UNKNOWN ],
+                    webformPrivate.LOAD_ERROR_ENTRY_ADVICE
+                );
+            } );
+
+            it( 'alerts multiple loading error messages', () => {
+                const errors = [ 'really', 'not', 'good!' ];
+
+                webformPrivate._showErrorOrAuthenticate( errors );
+
+                expect( loadErrorsStub ).to.have.been.calledWith(
+                    errors,
+                    webformPrivate.LOAD_ERROR_ENTRY_ADVICE
                 );
             } );
         } );
