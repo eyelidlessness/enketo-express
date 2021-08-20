@@ -141,9 +141,12 @@ function _setAppCacheEventHandlers() {
     } );
 }
 
+const FORM_UPDATED_MSG = 'alert.formupdated.msg';
+const FORM_UPDATED_HEADING = 'alert.formupdated.heading';
+
 function _setFormCacheEventHandlers( survey ) {
     document.addEventListener( events.FormUpdated().type, () => {
-        gui.feedback( t( 'alert.formupdated.msg' ), 20, t( 'alert.formupdated.heading' ) );
+        gui.feedback( t( FORM_UPDATED_MSG ), 20, t( FORM_UPDATED_HEADING ) );
     } );
 
     return survey;
