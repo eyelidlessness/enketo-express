@@ -1397,8 +1397,28 @@ describe( 'Enketo webform app', () => {
                         webformPrivate.APP_UPDATED_MSG,
                         20,
                         webformPrivate.APP_UPDATED_HEADING
-                    )
+                    );
                 } );
+            } );
+        } );
+
+        describe( 'form cache event handlers', () => {
+            it( 'provides GUI feedback when the form has been updated', () => {
+                const feedbackStub = sandbox.stub( gui, 'feedback' ).returns();
+
+                webformPrivate._setFormCacheEventHandlers();
+
+                sandbox.stub( i18next, 't' ).returnsArg( 0 );
+
+                const event = events.FormUpdated();
+
+                document.dispatchEvent( event );
+
+                expect( feedbackStub ).to.have.been.calledWith(
+                    webformPrivate.FORM_UPDATED_MSG,
+                    20,
+                    webformPrivate.FORM_UPDATED_HEADING
+                );
             } );
         } );
     } );
