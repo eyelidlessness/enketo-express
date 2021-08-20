@@ -91,12 +91,25 @@ function _updateMaxSizeSetting( survey ) {
     return survey;
 }
 
+/**
+ * Wrap location access to detect/prevent navigation in tests.
+ */
+ const _location = {
+    get href() {
+        return location.href;
+    },
+    set href( href ) {
+        location.href = href;
+    },
+    reload: location.reload.bind( location ),
+};
+
 function _showErrorOrAuthenticate( error ) {
     error = ( typeof error === 'string' ) ? new Error( error ) : error;
     loader.classList.add( 'fail' );
 
     if ( error.status === 401 ) {
-        window.location.href = `${settings.loginUrl}?return_url=${encodeURIComponent( window.location.href )}`;
+        _location.href = `${settings.loginUrl}?return_url=${encodeURIComponent( _location.href )}`;
     } else {
         if ( !Array.isArray( error ) ) {
             error = [ error.message  || t( 'error.unknown' ) ];
@@ -133,19 +146,25 @@ function _setFormCacheEventHandlers( survey ) {
     return survey;
 }
 
+const CONFIRM_DELETE_ALL_MESSAGE_KEY = 'confirm.deleteall.msg';
+const CONFIRM_DELETE_ALL_HEADING_KEY = 'confirm.deleteall.heading';
+const CONFIRM_DELETE_ALL_POS_BUTTON = 'confirm.deleteall.posButton';
+
+const FLUSH_BUTTON_SELECTOR = '.side-slider__advanced__button.flush-db';
+
 /**
  * Advanced/emergency handlers that should always be activated even if form loading fails.
  */
 function _setEmergencyHandlers() {
-    const flushBtn = document.querySelector( '.side-slider__advanced__button.flush-db' );
+    const flushBtn = document.querySelector( FLUSH_BUTTON_SELECTOR );
 
     if ( flushBtn ) {
         flushBtn.addEventListener( 'click', () => {
             gui.confirm( {
-                msg: t( 'confirm.deleteall.msg' ),
-                heading: t( 'confirm.deleteall.heading' )
+                msg: t( CONFIRM_DELETE_ALL_MESSAGE_KEY ),
+                heading: t( CONFIRM_DELETE_ALL_HEADING_KEY )
             }, {
-                posButton: t( 'confirm.deleteall.posButton' ),
+                posButton: t( CONFIRM_DELETE_ALL_POS_BUTTON ),
             } )
                 .then( confirmed => {
                     if ( !confirmed ) {
@@ -155,7 +174,7 @@ function _setEmergencyHandlers() {
                     return store.flush();
                 } )
                 .then( () => {
-                    location.reload();
+                    _location.reload();
                 } )
                 .catch( () => {} );
         } );
