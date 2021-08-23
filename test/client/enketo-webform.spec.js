@@ -20,28 +20,6 @@ import store from '../../public/js/src/module/store';
  */
 
 /**
- * @typedef ServiceWorkerControllerStub
- * @property {string} [scriptURL]
- */
-
-/**
- * @typedef ServiceWorkerRegistrationStub
- * @extends {EventListener}
- * @property {ServiceWorker<'activated' | 'activating'> | null} active
- * @property {ServiceWorker<'installing'> | null} installing
- * @property {string} scope
- * @property {Stub<[], Promise<void>} update
- */
-
-/**
- * @typedef ServiceWorkerStub
- * @template State
- * @property {ServiceWorkerControllerStub} [controller]
- * @property {Stub<[ string ], Promise<ServiceWorkerRegistrationStub>>} register
- * @property {State} state
- */
-
-/**
  * @typedef {import('../../app/models/survey-model').SurveyObject} Survey
  */
 
