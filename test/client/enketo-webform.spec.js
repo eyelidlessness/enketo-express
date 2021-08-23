@@ -460,7 +460,7 @@ describe( 'Enketo webform app', () => {
                     // While there is currently a truthiness check on the query result,
                     // there is a subsequent access outside that check.
                     prepareInitStep( {
-                        descrption: 'Add branding: Ensure a brand image query resolves to an element',
+                        description: 'Add branding: Ensure a brand image query resolves to an element',
                         stubMethod: 'callsFake',
                         object: document,
                         key: 'querySelector',
