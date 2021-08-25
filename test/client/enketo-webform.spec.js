@@ -591,7 +591,7 @@ describe( 'Enketo webform app', () => {
                         stubMethod: 'callsFake',
                         object: i18next,
                         key: 't',
-                        expectedArgs: [ webformPrivate.LOAD_ERROR_ENTRY_ADVICE, undefined ],
+                        expectedArgs: [ 'alert.loaderror.entryadvice', undefined ],
                         returnValue: translatedErrorAdvice,
                     } ),
                     prepareInitStep( {
@@ -671,7 +671,7 @@ describe( 'Enketo webform app', () => {
                         stubMethod: 'callsFake',
                         object: i18next,
                         key: 't',
-                        expectedArgs: [ webformPrivate.LOAD_ERROR_ENTRY_ADVICE, undefined ],
+                        expectedArgs: [ 'alert.loaderror.entryadvice', undefined ],
                         returnValue: translatedErrorAdvice,
                     } ),
                     prepareInitStep( {
@@ -891,7 +891,7 @@ describe( 'Enketo webform app', () => {
                         stubMethod: 'callsFake',
                         object: i18next,
                         key: 't',
-                        expectedArgs: [ webformPrivate.LOAD_ERROR_ENTRY_ADVICE, undefined ],
+                        expectedArgs: [ 'alert.loaderror.entryadvice', undefined ],
                         returnValue: translatedErrorAdvice,
                     } ),
                     prepareInitStep( {
@@ -1061,10 +1061,10 @@ describe( 'Enketo webform app', () => {
                 flushButton.dispatchEvent( new Event( 'click' ) );
 
                 expect( confirmStub ).to.have.been.calledWith( {
-                    msg: webformPrivate.CONFIRM_DELETE_ALL_MESSAGE_KEY,
-                    heading: webformPrivate.CONFIRM_DELETE_ALL_HEADING_KEY,
+                    msg: 'confirm.deleteall.msg',
+                    heading: 'confirm.deleteall.heading',
                 }, {
-                    posButton: webformPrivate.CONFIRM_DELETE_ALL_POS_BUTTON,
+                    posButton: 'confirm.deleteall.posButton',
                 } );
 
                 await Promise.all( [ confirmPromise, timers.tickAsync( 100 ) ] );
@@ -1084,10 +1084,10 @@ describe( 'Enketo webform app', () => {
                 flushButton.dispatchEvent( new Event( 'click' ) );
 
                 expect( confirmStub ).to.have.been.calledWith( {
-                    msg: webformPrivate.CONFIRM_DELETE_ALL_MESSAGE_KEY,
-                    heading: webformPrivate.CONFIRM_DELETE_ALL_HEADING_KEY,
+                    msg: 'confirm.deleteall.msg',
+                    heading: 'confirm.deleteall.heading',
                 }, {
-                    posButton: webformPrivate.CONFIRM_DELETE_ALL_POS_BUTTON,
+                    posButton: 'confirm.deleteall.posButton',
                 } );
 
                 await Promise.all( [ confirmPromise, timers.tickAsync( 100 ) ] );
@@ -1552,9 +1552,9 @@ describe( 'Enketo webform app', () => {
                     document.dispatchEvent( event );
 
                     expect( feedbackStub ).to.have.been.calledWith(
-                        webformPrivate.APP_UPDATED_MSG,
+                        'alert.appupdated.msg',
                         20,
-                        webformPrivate.APP_UPDATED_HEADING
+                        'alert.appupdated.heading'
                     );
                 } );
             } );
@@ -1571,9 +1571,9 @@ describe( 'Enketo webform app', () => {
                 document.dispatchEvent( event );
 
                 expect( feedbackStub ).to.have.been.calledWith(
-                    webformPrivate.FORM_UPDATED_MSG,
+                    'alert.formupdated.msg',
                     20,
-                    webformPrivate.FORM_UPDATED_HEADING
+                    'alert.formupdated.heading'
                 );
             } );
         } );
@@ -1655,7 +1655,7 @@ describe( 'Enketo webform app', () => {
 
                 expect( loadErrorsStub ).to.have.been.calledWith(
                     [ error.message ],
-                    webformPrivate.LOAD_ERROR_ENTRY_ADVICE
+                    'alert.loaderror.entryadvice'
                 );
             } );
 
@@ -1665,8 +1665,8 @@ describe( 'Enketo webform app', () => {
                 webformPrivate._showErrorOrAuthenticate( error );
 
                 expect( loadErrorsStub ).to.have.been.calledWith(
-                    [ webformPrivate.LOAD_ERROR_UNKNOWN ],
-                    webformPrivate.LOAD_ERROR_ENTRY_ADVICE
+                    [ 'error.unknown' ],
+                    'alert.loaderror.entryadvice'
                 );
             } );
 
@@ -1677,7 +1677,7 @@ describe( 'Enketo webform app', () => {
 
                 expect( loadErrorsStub ).to.have.been.calledWith(
                     errors,
-                    webformPrivate.LOAD_ERROR_ENTRY_ADVICE
+                    'alert.loaderror.entryadvice'
                 );
             } );
         } );

@@ -109,8 +109,6 @@ function _updateMaxSizeSetting( survey ) {
 };
 
 const LOAD_ERROR_CLASS = 'fail';
-const LOAD_ERROR_ENTRY_ADVICE = 'alert.loaderror.entryadvice';
-const LOAD_ERROR_UNKNOWN = 'error.unknown';
 
 function _showErrorOrAuthenticate( error ) {
     error = ( typeof error === 'string' ) ? new Error( error ) : error;
@@ -120,15 +118,12 @@ function _showErrorOrAuthenticate( error ) {
         _location.href = `${settings.loginUrl}?return_url=${encodeURIComponent( _location.href )}`;
     } else {
         if ( !Array.isArray( error ) ) {
-            error = [ error.message  || t( LOAD_ERROR_UNKNOWN ) ];
+            error = [ error.message  || t( 'error.unknown' ) ];
         }
 
-        gui.alertLoadErrors( error,  t( LOAD_ERROR_ENTRY_ADVICE ) );
+        gui.alertLoadErrors( error,  t( 'alert.loaderror.entryadvice' ) );
     }
 }
-
-const APP_UPDATED_MSG = 'alert.appupdated.msg';
-const APP_UPDATED_HEADING = 'alert.appupdated.heading';
 
 function _setAppCacheEventHandlers() {
 
@@ -145,24 +140,18 @@ function _setAppCacheEventHandlers() {
     } );
 
     document.addEventListener( events.ApplicationUpdated().type, () => {
-        gui.feedback( t( APP_UPDATED_MSG ), 20, t( APP_UPDATED_HEADING ) );
+        gui.feedback( t( 'alert.appupdated.msg' ), 20, t( 'alert.appupdated.heading' ) );
     } );
 }
 
-const FORM_UPDATED_MSG = 'alert.formupdated.msg';
-const FORM_UPDATED_HEADING = 'alert.formupdated.heading';
 
 function _setFormCacheEventHandlers( survey ) {
     document.addEventListener( events.FormUpdated().type, () => {
-        gui.feedback( t( FORM_UPDATED_MSG ), 20, t( FORM_UPDATED_HEADING ) );
+        gui.feedback( t( 'alert.formupdated.msg' ), 20, t( 'alert.formupdated.heading' ) );
     } );
 
     return survey;
 }
-
-const CONFIRM_DELETE_ALL_MESSAGE_KEY = 'confirm.deleteall.msg';
-const CONFIRM_DELETE_ALL_HEADING_KEY = 'confirm.deleteall.heading';
-const CONFIRM_DELETE_ALL_POS_BUTTON = 'confirm.deleteall.posButton';
 
 const FLUSH_BUTTON_SELECTOR = '.side-slider__advanced__button.flush-db';
 
@@ -175,10 +164,10 @@ function _setEmergencyHandlers() {
     if ( flushBtn ) {
         flushBtn.addEventListener( 'click', () => {
             gui.confirm( {
-                msg: t( CONFIRM_DELETE_ALL_MESSAGE_KEY ),
-                heading: t( CONFIRM_DELETE_ALL_HEADING_KEY )
+                msg: t( 'confirm.deleteall.msg' ),
+                heading: t( 'confirm.deleteall.heading' )
             }, {
-                posButton: t( CONFIRM_DELETE_ALL_POS_BUTTON ),
+                posButton: t( 'confirm.deleteall.posButton' ),
             } )
                 .then( confirmed => {
                     if ( !confirmed ) {
