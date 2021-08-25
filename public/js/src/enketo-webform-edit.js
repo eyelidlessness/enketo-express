@@ -25,7 +25,7 @@ function _updateMaxSizeSetting( survey ) {
 /**
  * Wrap location access to detect/prevent navigation in tests.
  */
- const _location = {
+const _location = {
     get href() {
         return location.href;
     },
