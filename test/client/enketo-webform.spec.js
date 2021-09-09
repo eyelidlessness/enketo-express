@@ -1352,6 +1352,7 @@ describe( 'Enketo webform app', () => {
                     modelStr: model,
                     instanceStr: null,
                     external: externalData,
+                    survey,
                 } );
             } );
 
@@ -1368,6 +1369,7 @@ describe( 'Enketo webform app', () => {
                     modelStr: model,
                     instanceStr: '<data><el1>v1</el1><el2>default</el2></data>',
                     external: externalData,
+                    survey,
                 } );
             } );
 
