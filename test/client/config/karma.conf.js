@@ -2,8 +2,11 @@
 // Generated on Wed Nov 26 2014 15:52:30 GMT-0700 (MST)
 
 const exportPrivate = require( '../../build-tools/esbuild-plugin-export-private' );
+const istanbulInstrument = require( '../../build-tools/esbuild-plugin-istanbul' );
 
-module.exports = config => {
+module.exports = async config => {
+    const { default: esbuildPipe } = await import( 'esbuild-plugin-pipe' );
+
     config.set( {
 
         // base path that will be used to resolve all patterns (eg. files, exclude)
@@ -41,7 +44,13 @@ module.exports = config => {
                 ENV: JSON.stringify( 'test' ),
             },
             plugins: [
-                exportPrivate(),
+                esbuildPipe( {
+                    filter: /(\/public\/js\/src\/|\/fixtures\/)/,
+                    plugins: [
+                        exportPrivate,
+                        istanbulInstrument,
+                    ],
+                } ),
             ],
             // TODO [2021-08-01]: target more up to date version when CI is able to use a newer verison of Chrome
             target: [
