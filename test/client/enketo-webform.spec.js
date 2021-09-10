@@ -950,7 +950,7 @@ describe( 'Enketo webform app', () => {
             } );
 
             it( 'assigns location.href', () => {
-                const newLocation = `${location.href.replace( /\#.*$/, '' )}#new-hash`;
+                const newLocation = `${location.href.replace( /#.*$/, '' )}#new-hash`;
 
                 webformPrivate._location.href = newLocation;
 
