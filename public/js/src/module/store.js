@@ -11,6 +11,10 @@ import encryptor from './encryptor';
 const parser = new DOMParser();
 
 /**
+ * @typedef {import('db.js')}
+ */
+
+/**
  * @typedef {import('../../../../app/models/record-model').EnketoRecord} EnketoRecord
  */
 
@@ -18,16 +22,29 @@ const parser = new DOMParser();
  * @typedef {import('../../../../app/models/survey-model').SurveyObject} Survey
  */
 
+/**
+ * @typedef {'readonly' | 'readwrite' | 'versionchange'} IDBTransactionMode_
+ */
+
 let server;
 let blobEncoding;
 let available = false;
+
 const databaseName = 'enketo';
 
-function init() {
+/**
+ * @typedef StoreInitOptions
+ * @property {boolean} [failSilently]
+ */
+
+/**
+ * @param {StoreInitOptions} [options]
+ */
+function init( { failSilently } = {} ) {
     return _checkSupport()
         .then( () => db.open( {
             server: databaseName,
-            version: 2,
+            version: 3,
             schema: {
                 // the surveys
                 surveys: {
@@ -75,6 +92,15 @@ function init() {
                             unique: false
                         }
                     }
+                },
+                lastSavedRecords: {
+                    /**
+                     * @see Note on `records` about unique keys across IndexedDB object stores
+                     */
+                    key: {
+                        keyPath: '_enketoId',
+                        autoIncrement: false,
+                    },
                 },
                 // the files that belong to a record
                 files: {
@@ -124,6 +150,10 @@ function init() {
             available = true;
         } )
         .catch( error => {
+            if ( failSilently ) {
+                return;
+            }
+
             console.error( 'store initialization error', error );
             // make error more useful and throw it further down the line
             if ( typeof error === 'string' ) {
@@ -945,5 +975,6 @@ export default {
     dynamicData: dataStore,
     record: recordStore,
     flush,
-    dump
+    dump,
+    get lastSavedRecords() { return server.lastSavedRecords; },
 };
