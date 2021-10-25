@@ -12,6 +12,10 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 module.exports = {
     bundle: true,
+    define: {
+        DEBUG: 'false',
+        ENV: JSON.stringify( process.env.NODE_ENV || 'development' ),
+    },
     entryPoints,
     format: 'iife',
     minify: isProduction,

@@ -1,4 +1,4 @@
-const acorn = require( 'acorn' );
+const esprima = require( 'recast/parsers/esprima' );
 const { builders, namedTypes } = require( 'ast-types' );
 const { parse, print } = require( 'recast' );
 const createPipeablePlugin = require( './esbuild-pipeable-plugin' );
@@ -73,7 +73,10 @@ const exportPrivate = createPipeablePlugin(
 
         /** @type {RecastAST} */
         let ast = parse( contents, {
-            parser: acorn,
+            /**
+             * @param {string} soruce
+             */
+            parser: esprima,
         } );
 
         /** @type {string[]} */
