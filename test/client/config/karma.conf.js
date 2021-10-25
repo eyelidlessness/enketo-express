@@ -42,9 +42,13 @@ module.exports = async config => {
         esbuild: {
             ...esbuildBaseConfig,
 
+            define: {
+                DEBUG: 'true',
+                ENV: JSON.stringify( 'test' ),
+            },
+
             plugins: [
                 ...esbuildBaseConfig.plugins,
-
 
                 esbuildPipe( {
                     filter: /(\/public\/js\/src\/|\/fixtures\/)/,
