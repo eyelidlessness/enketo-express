@@ -3,6 +3,7 @@
 
 const exportPrivate = require( '../../build-tools/esbuild-plugin-export-private' );
 const istanbulInstrument = require( '../../build-tools/esbuild-plugin-istanbul' );
+const esbuildConfig = require( '../../../config/build.js' );
 
 module.exports = async config => {
     const { default: esbuildPipe } = await import( 'esbuild-plugin-pipe' );
@@ -37,13 +38,14 @@ module.exports = async config => {
         },
 
         esbuild: {
+            ...esbuildConfig,
             define: {
-                // TODO [2021-08-01]: this fixes an issue with the `Object.fromEntries` polyfill, remove when CI is able to use a newer version
-                global: 'window', globalThis: 'window',
+                ...esbuildConfig.define,
                 DEBUG: 'true',
                 ENV: JSON.stringify( 'test' ),
             },
             plugins: [
+                ...esbuildConfig.plugins,
                 esbuildPipe( {
                     filter: /(\/public\/js\/src\/|\/fixtures\/)/,
                     plugins: [
@@ -51,10 +53,6 @@ module.exports = async config => {
                         istanbulInstrument,
                     ],
                 } ),
-            ],
-            // TODO [2021-08-01]: target more up to date version when CI is able to use a newer verison of Chrome
-            target: [
-                'chrome51',
             ],
         },
 

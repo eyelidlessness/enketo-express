@@ -14,6 +14,7 @@ import records from './records-queue';
 import $ from 'jquery';
 import encryptor from './encryptor';
 import formCache from './form-cache';
+import { getLastSavedRecord, populateLastSavedInstances } from './last-saved';
 
 /**
  * @typedef {import('../../../../app/models/survey-model').SurveyObject} Survey
@@ -38,6 +39,7 @@ const formOptions = {
  * @property {string} modelStr
  * @property {string} instanceStr
  * @property {Document[]} external
+ * @property {Survey} survey
  * @property {InstanceAttachment[]} [instanceAttachments]
  * @property {boolean} [isEditing]
  */
@@ -59,10 +61,7 @@ function init( formEl, data, loadErrors = [] ) {
                 data.instanceStr = record.xml;
             }
 
-            if ( record && record.draft ) {
-                // Make sure that Enketo Core won't do the instanceID --> deprecatedID move
-                data.submitted = false;
-            }
+            data.submitted = Boolean( data.isEditing );
 
             if ( data.instanceAttachments ) {
                 fileManager.setInstanceAttachments( data.instanceAttachments );
@@ -109,7 +108,7 @@ function init( formEl, data, loadErrors = [] ) {
 
             formprogress = document.querySelector( '.form-progress' );
 
-            _setEventHandlers( data.isEditing );
+            _setEventHandlers( data.survey );
             setLogoutLinkVisibility();
 
             if ( loadErrors.length > 0 ) {
@@ -161,56 +160,65 @@ function _checkAutoSavedRecord() {
 }
 
 /**
+ * @typedef ResetFormOptions
+ * @property {boolean} [isOffline]
+ */
+
+/**
  * Controller function to reset to the initial state of a form.
  *
  * Note: Previously this function accepted a boolean `confirmed` parameter, presumably
  * intending to block the reset behavior until user confirmation of save. But this
  * parameter was always passed as `true`. Relatedly, the `FormReset` event fired here
  * previously indirectly triggered `formCache.updateMedia` method, but it was triggered
- * with stale `survey` state, overwriting any changes to * `survey.lastSavedRecord`.
- * That event listener has been removed in favor of calling `updateMedia` directly with
- * the current state of `survey`. This change is being called out in case the removal
- * of that event listener impacts downstream forks.
+ * with stale `survey` state, overwriting any changes to `survey.externalData`
+ * referencing last-saved instances.
  *
- * @param {string} enketoId
+ * That event listener has been removed in favor of calling `updateMedia` directly with
+ * the current state of `survey` in offline mode. This change is being called out in
+ * case the removal of that event listener impacts downstream forks.
+ *
+ * @param {Survey} survey
+ * @param {ResetFormOptions} [options]
  * @return {Promise<void>}
  */
-function _resetForm( enketoId ) {
-    return formCache.get( { enketoId } )
-        .then( ( survey ) => {
+function _resetForm( survey, options = {} ) {
+    return getLastSavedRecord( survey.enketoId )
+        .then( lastSavedRecord => populateLastSavedInstances( survey, lastSavedRecord ) )
+        .then( survey => {
             const formEl = form.resetView();
 
             form = new Form( formEl, {
                 modelStr: formData.modelStr,
                 external: survey.externalData,
-                lastSavedRecord: survey.lastSavedRecord,
             }, formOptions );
 
             const loadErrors = form.init();
 
-            // formreset event will update the form media:
             form.view.html.dispatchEvent( events.FormReset() );
 
-            formCache.updateMedia( survey );
+            if ( options.isOffline ) {
+                formCache.updateMedia( survey );
+            }
 
             if ( records ) {
                 records.setActive( null );
             }
+
             if ( loadErrors.length > 0 ) {
                 gui.alertLoadErrors( loadErrors );
             }
-
         } );
-
 }
 
 /**
  * Loads a record from storage
  *
- * @param  { string } instanceId - [description]
- * @param  {=boolean?} confirmed -  [description]
+ * @param {Survey} survey
+ * @param {string} instanceId - [description]
+ * @param {=boolean?} confirmed -  [description]
  */
-function _loadRecord( instanceId, confirmed ) {
+function _loadRecord( survey, instanceId, confirmed ) {
     let texts;
     let choices;
     let loadErrors;
@@ -226,7 +234,7 @@ function _loadRecord( instanceId, confirmed ) {
         gui.confirm( texts, choices )
             .then( confirmed => {
                 if ( confirmed ) {
-                    _loadRecord( instanceId, true );
+                    _loadRecord( survey, instanceId, true );
                 }
             } );
     } else {
@@ -244,8 +252,11 @@ function _loadRecord( instanceId, confirmed ) {
                     submitted: false
                 }, formOptions );
                 loadErrors = form.init();
-                // formreset event will update the form media:
+
                 form.view.html.dispatchEvent( events.FormReset() );
+
+                formCache.updateMedia( survey );
+
                 form.recordName = record.name;
                 records.setActive( record.instanceId );
 
@@ -273,9 +284,9 @@ function _loadRecord( instanceId, confirmed ) {
  * This function does not save the record in the browser storage
  * and is not used in offline-capable views.
  *
- * @param {boolean} isEditing
+ * @param {Survey} survey
  */
-function _submitRecord( isEditing ) {
+function _submitRecord( survey ) {
     const redirect = settings.type === 'single' || settings.type === 'edit' || settings.type === 'view';
     let beforeMsg;
     let authLink;
@@ -312,7 +323,7 @@ function _submitRecord( isEditing ) {
                 return record;
             }
         } )
-        .then( record => connection.uploadRecord( record, { isLastSaved: !isEditing } ) )
+        .then( record => connection.uploadRecord( survey, record ) )
         .then( result => {
             result = result || {};
             level = 'success';
@@ -359,7 +370,7 @@ function _submitRecord( isEditing ) {
             } else {
                 msg = ( msg.length > 0 ) ? msg : t( 'alert.submissionsuccess.msg' );
                 gui.alert( msg, t( 'alert.submissionsuccess.heading' ), level );
-                _resetForm( settings.enketoId );
+                _resetForm( survey );
             }
         } )
         .catch( result => {
@@ -410,7 +421,14 @@ function _confirmRecordName( recordName, errorMsg ) {
 // Save the translations in case ever required in the future, by leaving this comment in:
 // t( 'confirm.save.renamemsg', {} )
 
-function _saveRecord( draft = true, recordName, confirmed, errorMsg ) {
+/**
+ * @param {Survey} survey
+ * @param {boolean} [draft]
+ * @param {string} [recordName]
+ * @param {boolean} [confirmed]
+ * @param {string} [errorMsg]
+ */
+function _saveRecord( survey, draft = true, recordName, confirmed, errorMsg ) {
     const include = { irrelevant: draft };
 
     // triggering "before-save" event to update possible "timeEnd" meta data in form
@@ -419,13 +437,13 @@ function _saveRecord( draft = true, recordName, confirmed, errorMsg ) {
     // check recordName
     if ( !recordName ) {
         return _getRecordName()
-            .then( name => _saveRecord( draft, name, false, errorMsg ) );
+            .then( name => _saveRecord( survey, draft, name, false, errorMsg ) );
     }
 
     // check whether record name is confirmed if necessary
     if ( draft && !confirmed ) {
         return _confirmRecordName( recordName, errorMsg )
-            .then( name => _saveRecord( draft, name, true ) )
+            .then( name => _saveRecord( survey, draft, name, true ) )
             .catch( () => {} );
     }
 
@@ -468,10 +486,10 @@ function _saveRecord( draft = true, recordName, confirmed, errorMsg ) {
 
             return records.save( saveMethod, record );
         } )
-        .then( record => {
+        .then( () => {
 
             records.removeAutoSavedRecord();
-            _resetForm( record.enketoId );
+            _resetForm( survey, { isOffline: true } );
 
             if ( draft ) {
                 gui.alert( t( 'alert.recordsavesuccess.draftmsg' ), t( 'alert.savedraftinfo.heading' ), 'info', 5 );
@@ -526,9 +544,9 @@ function _autoSaveRecord() {
 }
 
 /**
- * @param {boolean} [isEditing]
+ * @param {Survey} survey
  */
-function _setEventHandlers( isEditing = false ) {
+function _setEventHandlers( survey ) {
     const $doc = $( document );
 
     $( 'button#submit-form' ).click( function() {
@@ -539,9 +557,9 @@ function _setEventHandlers( isEditing = false ) {
                 .then( valid => {
                     if ( valid ) {
                         if ( settings.offline ) {
-                            return _saveRecord( false );
+                            return _saveRecord( survey, false );
                         } else {
-                            return _submitRecord( isEditing );
+                            return _submitRecord( survey );
                         }
                     } else {
                         gui.alert( t( 'alert.validationerror.msg' ) );
@@ -565,7 +583,7 @@ function _setEventHandlers( isEditing = false ) {
                 const $button = $( draftButton );
                 $button.btnBusyState( true );
                 setTimeout( () => {
-                    _saveRecord( true )
+                    _saveRecord( survey, true )
                         .then( () => {
                             $button.btnBusyState( false );
                         } )
@@ -645,7 +663,7 @@ function _setEventHandlers( isEditing = false ) {
     } );
 
     $doc.on( 'click', '.record-list__records__record[data-draft="true"]', function() {
-        _loadRecord( $( this ).attr( 'data-id' ), false );
+        _loadRecord( survey, $( this ).attr( 'data-id' ), false );
     } );
 
     $doc.on( 'click', '.record-list__records__record', function() {

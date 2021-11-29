@@ -64,9 +64,9 @@ function _initOffline( survey ) {
 function _initOnline( survey ) {
     console.log( 'App in online-only mode.' );
 
-    return store.init()
+    return store.init( { failSilently: true } )
         .then( () => initTranslator( survey ) )
-        .then( formCache.init )
+        .then( connection.getFormParts )
         .then( _addBranding )
         .then( _swapTheme )
         .then ( connection.getMaximumSubmissionSize )
@@ -267,6 +267,7 @@ function _init( formParts ) {
         modelStr: formParts.model,
         instanceStr: _prepareInstance( formParts.model, settings.defaults ),
         external: formParts.externalData,
+        survey: formParts,
     } )
         .then( form => {
             formParts.languages = form.languages;
