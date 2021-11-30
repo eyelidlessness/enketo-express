@@ -1944,6 +1944,7 @@ describe( 'Enketo webform app entrypoints', () => {
                             external: maxSizeSurvey.externalData,
                             instanceAttachments,
                             isEditing: true,
+                            survey: maxSizeSurvey,
                         },
                     ],
                     returnValue: Promise.resolve( initializedForm ),
