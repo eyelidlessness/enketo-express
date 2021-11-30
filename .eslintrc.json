@@ -15,7 +15,7 @@
     ],
     "parserOptions": {
         "sourceType": "module",
-        "allowImportExportEverywhere": true
+        "ecmaVersion": 2020
     },
     "settings": {
         "jsdoc": {
@@ -64,6 +64,19 @@
         "no-unused-vars": [ "error", {
             "ignoreRestSiblings": true
         } ]
-    }
+    },
+    "overrides": [
+        {
+            "files": [
+                "config/build.js",
+                "test/client/config/karma.conf.js",
+                "scripts/build.js"
+            ],
+            "env": {
+                "browser": false,
+                "node": true
+            }
+        }
+    ]
 }
 

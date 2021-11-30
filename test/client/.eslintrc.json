@@ -13,7 +13,8 @@
     },
     "extends": "../../.eslintrc.json",
     "parserOptions": {
-        "sourceType": "module"
+        "sourceType": "module",
+        "ecmaVersion": 2020
     },
     "rules": {
         "indent": [ "warn", 4, {
