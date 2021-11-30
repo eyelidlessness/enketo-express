@@ -488,9 +488,10 @@ describe( 'Enketo webform app entrypoints', () => {
                         expectedArgs: [
                             formElement,
                             {
-                                modelStr: offlineSurvey.model,
+                                modelStr: maxSizeSurvey.model,
                                 instanceStr: null,
-                                external: offlineSurvey.externalData,
+                                external: maxSizeSurvey.externalData,
+                                survey: maxSizeSurvey,
                             },
                         ],
                         returnValue: Promise.resolve( webformInitializedSurvey ),
@@ -749,7 +750,7 @@ describe( 'Enketo webform app entrypoints', () => {
                         stubMethod: 'callsFake',
                         object: store,
                         key: 'init',
-                        expectedArgs: [],
+                        expectedArgs: [ { failSilently: true } ],
                         returnValue: Promise.resolve(),
                     } ),
                     prepareInitStep( {
@@ -758,32 +759,8 @@ describe( 'Enketo webform app entrypoints', () => {
                         object: i18next,
                         key: 'init',
                         expectedArgs: [ expectObject, expectCallback ],
-                    } ),
-
-                    /**
-                     * Start form caching workarounds: the following steps are necessary
-                     * to mock, but incorrect because forms are cached in online mode.
-                     *
-                     * @see {@link https://github.com/enketo/enketo-express/pull/293}
-                     */
-                    prepareInitStep( {
-                        description: 'Initialize IndexedDB store (used for last-saved instances)',
-                        stubMethod: 'callsFake',
-                        object: store,
-                        key: 'init',
-                        expectedArgs: [],
                         returnValue: Promise.resolve(),
                     } ),
-                    prepareInitStep( {
-                        description: 'Form cache: attempt to get cached survey',
-                        stubMethod: 'callsFake',
-                        object: store.survey,
-                        key: 'get',
-                        expectedArgs: [ surveyInit.enketoId ],
-                        returnValue: Promise.resolve(),
-                    } ),
-                    // End of form caching workarounds.
-
                     prepareInitStep( {
                         description: 'Get form parts',
                         stubMethod: 'callsFake',
@@ -792,33 +769,6 @@ describe( 'Enketo webform app entrypoints', () => {
                         expectedArgs: [ surveyInit ],
                         returnValue: Promise.resolve( onlineSurvey ),
                     } ),
-
-                    // Additional form caching workarounds.
-                    prepareInitStep( {
-                        description: 'Form cache: set survey cache',
-                        stubMethod: 'callsFake',
-                        object: store.survey,
-                        key: 'set',
-                        expectedArgs: [ expectObject ],
-                        returnValue: Promise.resolve( onlineSurvey ),
-                    } ),
-                    prepareInitStep( {
-                        description: 'Form cache: get dynamic data',
-                        stubMethod: 'callsFake',
-                        object: store.dynamicData,
-                        key: 'get',
-                        expectedArgs: [ enketoId ],
-                        returnValue: Promise.resolve( {} ),
-                    } ),
-                    prepareInitStep( {
-                        description: 'Form cache: update dynamic data',
-                        stubMethod: 'callsFake',
-                        object: store.dynamicData,
-                        key: 'update',
-                        expectedArgs: [ expectObject ],
-                        returnValue: Promise.resolve( {} ),
-                    } ),
-                    // End of additional form caching workarounds.
 
                     // While there is currently a truthiness check on the query result,
                     // there is a subsequent access outside that check.
@@ -870,9 +820,10 @@ describe( 'Enketo webform app entrypoints', () => {
                         expectedArgs: [
                             formElement,
                             {
-                                modelStr: onlineSurvey.model,
+                                modelStr: maxSizeSurvey.model,
                                 instanceStr: null,
-                                external: onlineSurvey.externalData,
+                                external: maxSizeSurvey.externalData,
+                                survey: maxSizeSurvey,
                             },
                         ],
                         returnValue: Promise.resolve( webformInitializedSurvey ),
@@ -925,7 +876,7 @@ describe( 'Enketo webform app entrypoints', () => {
                         stubMethod: 'callsFake',
                         object: store,
                         key: 'init',
-                        expectedArgs: [],
+                        expectedArgs: [ { failSilently: true } ],
                         returnValue: Promise.reject( error ),
                     } ),
                     prepareInitStep( {
@@ -1472,6 +1423,7 @@ describe( 'Enketo webform app entrypoints', () => {
                     modelStr: model,
                     instanceStr: null,
                     external: externalData,
+                    survey: survey,
                 } );
             } );
 
@@ -1488,6 +1440,7 @@ describe( 'Enketo webform app entrypoints', () => {
                     modelStr: model,
                     instanceStr: '<data><el1>v1</el1><el2>default</el2></data>',
                     external: externalData,
+                    survey: survey,
                 } );
             } );
 
@@ -1991,6 +1944,7 @@ describe( 'Enketo webform app entrypoints', () => {
                             external: maxSizeSurvey.externalData,
                             instanceAttachments,
                             isEditing: true,
+                            survey: maxSizeSurvey,
                         },
                     ],
                     returnValue: Promise.resolve( initializedForm ),

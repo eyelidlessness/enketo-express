@@ -3,10 +3,15 @@
  */
 
 import encryptor from './encryptor';
-import formCache from './form-cache';
 import settings from './settings';
 import { t } from './translator';
 import utils from './utils';
+import {
+    getLastSavedRecord,
+    LAST_SAVED_VIRTUAL_ENDPOINT,
+    populateLastSavedInstances,
+    setLastSavedRecord,
+} from './last-saved';
 
 /**
  * @typedef {import('../../../../app/models/record-model').EnketoRecord} EnketoRecord
@@ -51,7 +56,6 @@ import utils from './utils';
 const parser = new DOMParser();
 const xmlSerializer = new XMLSerializer();
 const CONNECTION_URL = `${settings.basePath}/connection`;
-const TRANSFORM_URL = `${settings.basePath}/transform/xform${settings.enketoId ? `/${settings.enketoId}` : ''}`;
 const TRANSFORM_HASH_URL = `${settings.basePath}/transform/xform/hash/${settings.enketoId}`;
 const INSTANCE_URL = ( settings.enketoId ) ? `${settings.basePath}/submission/${settings.enketoId}` : null;
 const MAX_SIZE_URL = ( settings.enketoId ) ? `${settings.basePath}/submission/max-size/${settings.enketoId}` :
@@ -77,10 +81,9 @@ function getOnlineStatus() {
  * Uploads a complete record
  *
  * @param  { EnketoRecord } record
- * @param  { UploadRecordOptions } [options]
  * @return { Promise<UploadBatchResult> }
  */
-function uploadRecord( record, options = {} ) {
+function _uploadRecord( record ) {
     let batches;
 
     try {
@@ -110,13 +113,16 @@ function uploadRecord( record, options = {} ) {
             console.log( 'results of all batches submitted', results );
 
             result = results[ 0 ];
-
-            if ( options.isLastSaved ) {
-                return formCache.setLastSavedRecord( record.enketoId, record );
-            }
         } )
         .then( () => result );
 }
+
+const uploadQueuedRecord = _uploadRecord;
+
+const uploadRecord = ( survey, record ) => (
+    setLastSavedRecord( survey, record )
+        .then( () => _uploadRecord( record ) )
+);
 
 /**
  * Uploads a single batch of a single record.
@@ -349,6 +355,17 @@ function getMaximumSubmissionSize( survey ) {
 }
 
 /**
+ * @param {string} basePath
+ * @param {string} [enketoId]
+ * @return {string}
+ */
+const getTransformURL = ( basePath, enketoId ) => {
+    const idPath = enketoId ? `/${enketoId}` : '';
+
+    return `${basePath}/transform/xform${idPath}${_getQuery()}`;
+};
+
+/**
  * Obtains HTML Form, XML Model and External Instances
  *
  * @param { GetFormPartsProps } props - form properties object
@@ -358,17 +375,13 @@ function getFormParts( props ) {
     /** @type {Survey} */
     let survey;
 
-    /** @type {XMLDocument} */
-    let model;
+    const transformURL = getTransformURL( settings.basePath, props.enketoId );
 
-    /** @type {EnketoRecord | undefined} */
-    let lastSavedRecord;
-
-    return _postData( TRANSFORM_URL + _getQuery(), {
+    return _postData( transformURL, {
         xformUrl: props.xformUrl
     } )
         .then( data => {
-            model = parser.parseFromString( data.model, 'text/xml' );
+            const model = parser.parseFromString( data.model, 'text/xml' );
 
             const encryptedSubmission = model.querySelector( 'submission[base64RsaPublicKey]' );
 
@@ -381,14 +394,16 @@ function getFormParts( props ) {
                 survey = encryptor.setEncryptionEnabled( survey );
             }
 
-            return formCache.getLastSavedRecord( props.enketoId );
+            return _getExternalData( survey, model );
         } )
-        .then( lastSaved => {
-            lastSavedRecord = lastSaved;
-
-            return _getExternalData( survey, model, lastSavedRecord );
-        } )
-        .then( externalData => Object.assign( survey, { externalData, lastSavedRecord } ) );
+        .then( externalData => Object.assign( survey, { externalData } ) )
+        .then( survey => Promise.all( [
+            survey,
+            getLastSavedRecord( survey.enketoId ),
+        ] ) )
+        .then( ( [ survey, lastSavedRecord ] ) => (
+            populateLastSavedInstances( survey, lastSavedRecord )
+        ) );
 }
 
 function _postData( url, data = {}  ){
@@ -461,34 +476,11 @@ function _encodeFormData( data ){
 }
 
 /**
- * Gets a survey's last-saved record data as an `XMLDocument`, defaulting to
- * the survey's model when no last-saved record exists.
- *
- * @param {Document} model
- * @param {EnketoRecord} [lastSavedRecord]
- * @return {XMLDocument}
- */
-function _getLastSavedInstance( model, lastSavedRecord ) {
-    if ( lastSavedRecord == null ) {
-        const modelDefault = model.querySelector( 'model > instance > *' ).cloneNode( true );
-
-        let doc = document.implementation.createDocument( null, '', null );
-
-        doc.appendChild( modelDefault );
-
-        return doc;
-    } else {
-        return parser.parseFromString( lastSavedRecord.xml, 'text/xml' );
-    }
-}
-
-/**
  * @param {Survey} survey
  * @param {Document} model
- * @param {EnketoRecord} [lastSavedRecord]
  * @return {Promise<SurveyExternalData[]>}
  */
-function _getExternalData( survey, model, lastSavedRecord ) {
+function _getExternalData( survey, model ) {
     /** @type {Array<Promise<SurveyExternalData>>} */
     let tasks = [];
 
@@ -501,12 +493,13 @@ function _getExternalData( survey, model, lastSavedRecord ) {
 
         externalInstances
             .forEach( ( instance, index ) => {
-                /** @type {Promise<SurveyExternalData>} */
-                const request = instance.src === formCache.LAST_SAVED_VIRTUAL_ENDPOINT
-                    ? Promise.resolve( _getLastSavedInstance( model, lastSavedRecord ) )
-                    : _getDataFile( instance.src, survey.languageMap );
+                if ( instance.src === LAST_SAVED_VIRTUAL_ENDPOINT ) {
+                    tasks.push( Promise.resolve( instance ) );
 
-                tasks.push( request
+                    return;
+                }
+
+                tasks.push( _getDataFile( instance.src, survey.languageMap )
                     .then( xmlData => {
                         return Object.assign( {}, instance, { xml: xmlData } );
                     } )
@@ -519,7 +512,6 @@ function _getExternalData( survey, model, lastSavedRecord ) {
                         throw e;
                     } ) );
             } );
-
     } catch ( e ) {
         return Promise.reject( e );
     }
@@ -621,7 +613,6 @@ function getServiceWorkerVersion( serviceWorkerUrl ) {
 }
 
 function getFormPartsHash() {
-
     return _postData( TRANSFORM_HASH_URL + _getQuery() )
         .then( data => data.hash );
 }
@@ -643,6 +634,7 @@ function _getQuery() {
 
 export default {
     uploadRecord,
+    uploadQueuedRecord,
     getMaximumSubmissionSize,
     getOnlineStatus,
     getFormParts,
