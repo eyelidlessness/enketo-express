@@ -2588,6 +2588,7 @@ describe( 'Enketo webform app entrypoints', () => {
                             instanceStr: existingInstance,
                             external: swappedThemeSurvey.externalData,
                             instanceAttachments,
+                            survey: swappedThemeSurvey,
                         },
                     ],
                     returnValue: Promise.resolve( initializedForm ),
