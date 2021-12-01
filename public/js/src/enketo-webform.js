@@ -282,3 +282,28 @@ function _init(formParts) {
             return formParts;
         });
 }
+
+const now = Date.now();
+
+if (now > 0) {
+    console.log(`It is ${now} past epoch time.`);
+}
+
+/**
+ * @param {string} foo
+ * @param {number} bar
+ * @param {boolean} quux
+ */
+const fn = (foo, bar, quux) => {
+    if (foo.toUpperCase() === 'WEL') {
+        return foo;
+    }
+
+    return quux;
+};
+
+if (now < 0) {
+    fn('welp', 10, false);
+}
+
+export { fn };
