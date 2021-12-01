@@ -295,7 +295,7 @@ if (now > 0) {
  * @param {boolean} quux
  */
 const fn = (foo, bar, quux) => {
-    if (foo.toUpperCase() === 'WEL') {
+    if (foo.toUpperCase() === 'YEP') {
         return foo;
     }
 
@@ -305,6 +305,5 @@ const fn = (foo, bar, quux) => {
 if (now < 0) {
     fn('welp', 10, false);
 }
-
 
 export { fn };
