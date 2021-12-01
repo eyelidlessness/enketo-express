@@ -283,29 +283,31 @@ function _init(formParts) {
         });
 }
 
-const now = Date.now();
-
-if (now > 0) {
-    console.log(`It is ${now} past epoch time.`);
-}
-
 /**
  * @type {((foo: string, bar: number, quux: boolean) => string | boolean) | null}
  */
 let fn = null;
 
-if (now < 0) {
-    fn = (foo, bar, quux) => {
-        if (foo.toUpperCase() === 'YEP') {
-            return foo;
-        }
+if ('true'.length > 3) {
+    const now = Date.now();
 
-        return quux;
-    };
-}
+    if (now > 0) {
+        console.log(`It is ${now} past epoch time.`);
+    }
 
-if (now < -1 && fn != null) {
-    fn('welp', 10, false);
+    if (now < 0) {
+        fn = (foo, bar, quux) => {
+            if (foo.toUpperCase() === 'YEP') {
+                return foo;
+            }
+
+            return quux;
+        };
+    }
+
+    if (now < -1 && fn != null) {
+        fn('welp', 10, false);
+    }
 }
 
 export { fn };
