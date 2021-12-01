@@ -2744,6 +2744,106 @@ describe('Enketo webform app entrypoints', () => {
 
             expect(performedSteps.length).to.equal(steps.length);
         });
+
+        const invalidForms = [
+            { form: '<form></form>' },
+            { model: '<any />' },
+        ];
+
+        invalidForms.forEach((formData) => {
+            it('reports view initialization failure when fetched form data is invalid', async () => {
+                enketoId = 'viewA';
+
+                const formParts = {
+                    ...surveyInitData,
+                    ...formData,
+
+                    externalData: [],
+                    languages: [],
+                    theme: 'kobo',
+                };
+
+                existingInstance = '<a>value</a>';
+
+                const instanceAttachments = {
+                    'a.jpg': 'https://example.com/a.jpg',
+                };
+
+                const instanceResult = {
+                    instance: existingInstance,
+                    instanceAttachments,
+                    ignoreMe: true,
+                };
+
+                const translatedErrorMessage = 'Unknown error';
+
+                const steps = [
+                    prepareInitStep({
+                        description: 'Translator: initialize i18next',
+                        stubMethod: 'callsFake',
+                        object: i18next,
+                        key: 'init',
+                        expectedArgs: [ expectObject, expectCallback ],
+                    }),
+                    prepareInitStep({
+                        description: 'Get form parts',
+                        stubMethod: 'callsFake',
+                        object: connection,
+                        key: 'getFormParts',
+                        expectedArgs: [ surveyInitData ],
+                        returnValue: Promise.resolve(formParts),
+                    }),
+                    prepareInitStep({
+                        description: 'Get existing instance',
+                        stubMethod: 'callsFake',
+                        object: connection,
+                        key: 'getExistingInstance',
+                        expectedArgs: [ surveyInitData ],
+                        returnValue: Promise.resolve(instanceResult),
+                    }),
+                    prepareInitStep({
+                        description: 'Translate error message',
+                        stubMethod: 'callsFake',
+                        object: i18next,
+                        key: 't',
+                        expectedArgs: [ 'error.unknown', undefined ],
+                        returnValue: translatedErrorMessage,
+                    }),
+                    prepareInitStep({
+                        description: 'Set error class',
+                        stubMethod: 'callsFake',
+                        object: loaderElement.classList,
+                        key: 'add',
+                        expectedArgs: [ webformViewPrivate.LOAD_ERROR_CLASS ],
+                    }),
+                    prepareInitStep({
+                        description: 'Alert load errors',
+                        stubMethod: 'callsFake',
+                        object: gui,
+                        key: 'alertLoadErrors',
+                        expectedArgs: [ [ translatedErrorMessage ] ]
+                    }),
+                ];
+
+                /** @type {Promise} */
+                let viewInitialization = webformViewPrivate._init(surveyInitData);
+
+                await viewInitialization;
+
+                for (const [ expectedIndex, expectedStep ] of steps.entries()) {
+                    const step = performedSteps.find(performedStep => {
+                        return performedStep === expectedStep;
+                    });
+                    const index = performedSteps.indexOf(expectedStep);
+
+                    expect(step).to.equal(expectedStep);
+                    expect(index, `Unexpected order of step ${expectedStep.options.description}`)
+                        .to.equal(expectedIndex);
+                }
+
+                expect(performedSteps.length).to.equal(steps.length);
+            });
+        });
     });
 
 
