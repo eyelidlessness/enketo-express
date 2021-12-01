@@ -1,6 +1,8 @@
 name: GHCR
 
-on: push
+on:
+  push:
+    branches: [ 'nope' ]
 
 env:
   # Use docker.io for Docker Hub if empty
