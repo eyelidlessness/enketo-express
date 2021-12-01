@@ -282,36 +282,3 @@ function _init(formParts) {
             return formParts;
         });
 }
-
-/**
- * @type {((foo: string, bar: number, quux: boolean) => string | boolean) | null}
- */
-let fn = (foo, bar, quux) => {
-    console.log('init fn call', foo, bar, quux);
-
-    if ('true'.length > 3) {
-        const now = Date.now();
-
-        if (now > 0) {
-            console.log(`It is ${now} past epoch time.`);
-        }
-
-        if (now < 0) {
-            fn = (foo, bar, quux) => {
-                if (foo.toUpperCase() === 'YEP') {
-                    return foo;
-                }
-
-                return quux;
-            };
-        } else {
-            fn = null;
-        }
-
-        if (now < -1 && fn != null) {
-            fn('welp', 10, false);
-        }
-    }
-};
-
-export { fn };
