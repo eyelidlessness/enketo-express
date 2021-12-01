@@ -2145,7 +2145,7 @@ describe('Enketo webform app entrypoints', () => {
                         returnValue: Promise.resolve(instanceResult),
                     }),
                     prepareInitStep({
-                        description: 'Translate error advice',
+                        description: 'Translate error message',
                         stubMethod: 'callsFake',
                         object: i18next,
                         key: 't',
@@ -2911,19 +2911,19 @@ describe('Enketo webform app entrypoints', () => {
                         returnValue: Promise.resolve(instanceResult),
                     }),
                     prepareInitStep({
-                        description: 'Set error class',
-                        stubMethod: 'callsFake',
-                        object: loaderElement.classList,
-                        key: 'add',
-                        expectedArgs: [ webformViewPrivate.LOAD_ERROR_CLASS ],
-                    }),
-                    prepareInitStep({
-                        description: 'Translate error advice',
+                        description: 'Translate error message',
                         stubMethod: 'callsFake',
                         object: i18next,
                         key: 't',
                         expectedArgs: [ 'error.unknown', undefined ],
                         returnValue: translatedErrorMessage,
+                    }),
+                    prepareInitStep({
+                        description: 'Set error class',
+                        stubMethod: 'callsFake',
+                        object: loaderElement.classList,
+                        key: 'add',
+                        expectedArgs: [ webformViewPrivate.LOAD_ERROR_CLASS ],
                     }),
                     prepareInitStep({
                         description: 'Alert load errors',
