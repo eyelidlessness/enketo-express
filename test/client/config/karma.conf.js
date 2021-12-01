@@ -70,6 +70,9 @@ module.exports = async config => {
 
         coverageReporter: {
             dir: 'test-coverage/client',
+            subdir: (browser) => {
+                return browser.toLowerCase().split(/[ /-]/)[0];
+            },
             reporters: [
                 // for in-depth analysis in your browser
                 {
@@ -85,7 +88,10 @@ module.exports = async config => {
                 {
                     type: 'text-summary',
                     includeAllSources: true
-                }
+                },
+                {
+                    type: 'lcov',
+                },
             ]
         },
 
