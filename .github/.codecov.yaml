@@ -5,6 +5,11 @@ coverage:
   range: 0..100
   round: down
   precision: 2
+  threshold: 100%
+
+flag_management:
+  default_rules:
+    carryforward: yes
 
 parsers:
   javascript:
@@ -13,8 +18,8 @@ parsers:
     branch_detection:
       conditional: yes
       loop: yes
-      method: no
-      macro: no
+      method: yes
+      macro: yes
 
 comment:
   layout: "reach,diff,flags,files,footer"
