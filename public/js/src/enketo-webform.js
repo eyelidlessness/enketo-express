@@ -290,19 +290,21 @@ if (now > 0) {
 }
 
 /**
- * @param {string} foo
- * @param {number} bar
- * @param {boolean} quux
+ * @type {((foo: string, bar: number, quux: boolean) => string | boolean) | null}
  */
-const fn = (foo, bar, quux) => {
-    if (foo.toUpperCase() === 'YEP') {
-        return foo;
-    }
-
-    return quux;
-};
+let fn = null;
 
 if (now < 0) {
+    fn = (foo, bar, quux) => {
+        if (foo.toUpperCase() === 'YEP') {
+            return foo;
+        }
+
+        return quux;
+    };
+}
+
+if (now < -1 && fn != null) {
     fn('welp', 10, false);
 }
 
