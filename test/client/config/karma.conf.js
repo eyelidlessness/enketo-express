@@ -1,12 +1,7 @@
-// Karma configuration
-// Generated on Wed Nov 26 2014 15:52:30 GMT-0700 (MST)
-const resolve = require( 'rollup-plugin-node-resolve' );
-const commonjs = require( 'rollup-plugin-commonjs' );
-const json = require( 'rollup-plugin-json' );
-const builtins = require( 'rollup-plugin-node-builtins' );
-const globals = require( 'rollup-plugin-node-globals' );
-const rollupIstanbul = require( 'rollup-plugin-istanbul' );
-const istanbul = require( 'istanbul' );
+/* eslint-env node */
+
+const baseESBuildConfig = require( '../../../config/build.js' );
+const esbuildPluginIstanbul = require( '../../../tools/esbuild-plugin-istanbul.js' );
 
 module.exports = config => {
     config.set( {
@@ -22,10 +17,12 @@ module.exports = config => {
 
         // list of files / patterns to load in the browser
         files: [
-            'test/client/**/*.spec.js', {
+            {
                 pattern: 'public/js/src/**/*.js',
-                included: false
+                included: false,
+                served: false,
             },
+            'test/client/**/*.spec.js'
         ],
 
 
@@ -36,30 +33,19 @@ module.exports = config => {
         // preprocess matching files before serving them to the browser
         // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
         preprocessors: {
-            'test/client/**/*.spec.js': [ 'rollup' ],
+            'public/js/**/*.js': [ 'esbuild' ],
+            'test/client/**/*.js': [ 'esbuild' ],
         },
-        rollupPreprocessor: {
-            output: {
-                format: 'iife'
+
+        esbuild: {
+            ...baseESBuildConfig,
+            define: {
+                version: 'undefined',
             },
             plugins: [
-                resolve( {
-                    browser: true, // Default: false
-                } ),
-                commonjs( {
-                    include: 'node_modules/**', // Default: undefined
-                    sourceMap: false, // Default: true
-                } ),
-                json(), // used to import package.json in tests
-                builtins(),
-                globals(),
-                rollupIstanbul( {
-                    include: [
-                        'public/js/src/**/*.js'
-                    ],
-                    exclude: []
-                } )
-            ]
+                ...baseESBuildConfig.plugins,
+                esbuildPluginIstanbul(),
+            ],
         },
 
         browserify: {
@@ -76,6 +62,9 @@ module.exports = config => {
 
         coverageReporter: {
             dir: 'test-coverage/client',
+            subdir: ( browser ) => {
+                return browser.toLowerCase().split( /[ /-]/ )[0];
+            },
             reporters: [
                 // for in-depth analysis in your browser
                 {
@@ -91,7 +80,11 @@ module.exports = config => {
                 {
                     type: 'text-summary',
                     includeAllSources: true
-                }
+                },
+                {
+                    type: 'lcov',
+                    includeAllSources: true,
+                },
             ]
         },
 

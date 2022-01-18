@@ -1,9 +1,27 @@
+/**
+ * @module store.spec.js
+ * @description Tests client-side data storage logic
+ * @see {SurveyEncryptionSpec}
+ */
+
 // TODO: when chai-as-promised adapter is working, convert these tests using .eventually.
 
+import db from 'db.js';
 import store from '../../public/js/src/module/store';
 
+/**
+ * @typedef {import('./feature/survey-encryption.spec.js')} SurveyEncryptionSpec
+ */
+
+/**
+ * @typedef {import('../../app/models/survey-model').SurveyObject} Survey
+ */
+
 describe( 'Client Storage', () => {
-    let resourceA, resourceB, fileA, fileB, recordA, recordB, surveyA;
+    let resourceA, resourceB, fileA, fileB, recordA, recordB;
+
+    /** @type {Survey} */
+    let surveyA;
 
     before( done => {
         store.init()
@@ -61,7 +79,7 @@ describe( 'Client Storage', () => {
 
     describe( 'storing settings and properties', () => {
 
-        beforeEach( done => {
+        afterEach( done => {
             store.property.removeAll()
                 .then( done, done );
         } );
@@ -133,7 +151,7 @@ describe( 'Client Storage', () => {
 
     describe( 'storing (form) resources', () => {
 
-        beforeEach( done => {
+        afterEach( done => {
             store.survey.removeAll()
                 .then( done, done );
         } );
@@ -190,7 +208,7 @@ describe( 'Client Storage', () => {
 
     describe( 'storing surveys', () => {
 
-        beforeEach( done => {
+        afterEach( done => {
             store.survey.removeAll()
                 .then( done, done );
         } );
@@ -249,10 +267,13 @@ describe( 'Client Storage', () => {
                     done();
                 } );
         } );
-
     } );
 
     describe( 'getting surveys', () => {
+        afterEach( done => {
+            store.survey.removeAll()
+                .then( done, done );
+        } );
 
         it( 'returns undefined if a survey does not exist', done => {
             store.survey.get( 'nonexisting' )
@@ -261,12 +282,11 @@ describe( 'Client Storage', () => {
                 } )
                 .then( done, done );
         } );
-
     } );
 
     describe( 'updating surveys', () => {
 
-        beforeEach( done => {
+        afterEach( done => {
             store.survey.removeAll()
                 .then( done, done );
         } );
@@ -351,7 +371,7 @@ describe( 'Client Storage', () => {
 
     describe( 'removing surveys', () => {
 
-        beforeEach( done => {
+        afterEach( done => {
             store.survey.removeAll()
                 .then( done, done );
         } );
@@ -389,7 +409,7 @@ describe( 'Client Storage', () => {
 
     describe( 'storing (record) files', () => {
 
-        beforeEach( done => {
+        afterEach( done => {
             store.record.removeAll()
                 .then( done, done );
         } );
@@ -447,7 +467,7 @@ describe( 'Client Storage', () => {
 
     describe( 'storing records', () => {
 
-        beforeEach( done => {
+        afterEach( done => {
             store.record.removeAll()
                 .then( done, done );
         } );
@@ -584,7 +604,7 @@ describe( 'Client Storage', () => {
 
     describe( 'updating records', () => {
 
-        beforeEach( done => {
+        afterEach( done => {
             store.record.removeAll()
                 .then( done, done );
         } );
@@ -744,7 +764,7 @@ describe( 'Client Storage', () => {
 
     describe( 'removing records', () => {
 
-        beforeEach( done => {
+        afterEach( done => {
             store.record.removeAll()
                 .then( done, done );
         } );
@@ -787,7 +807,7 @@ describe( 'Client Storage', () => {
 
     describe( 'obtaining a list of records', () => {
 
-        beforeEach( done => {
+        afterEach( done => {
             store.record.removeAll()
                 .then( done, done );
         } );
@@ -854,4 +874,36 @@ describe( 'Client Storage', () => {
 
     } );
 
+    describe( 'initialization failures', () => {
+        /** @type {import('sinon').SinonSandbox} */
+        let sandbox;
+
+        /** @type {Error | Event} */
+        let error;
+
+        beforeEach( () => {
+            sandbox = sinon.createSandbox();
+
+            sandbox.stub( db, 'open' ).callsFake( () => Promise.reject( error ) );
+        } );
+
+        afterEach( () => {
+            sandbox.restore();
+        } );
+
+        it( 'fails silently when specified', async () => {
+            error = new Error();
+
+            /** @type {Error | null} */
+            let caught = null;
+
+            try {
+                await store.init( { failSilently: true } );
+            } catch ( error ) {
+                caught = error;
+            }
+
+            expect( caught ).to.equal( null );
+        } );
+    } );
 } );

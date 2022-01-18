@@ -43,7 +43,8 @@ if ( settings.offline ) {
         .catch( _showErrorOrAuthenticate );
 } else {
     console.log( 'App in online-only mode.' );
-    initTranslator( survey )
+    store.init( { failSilently: true } )
+        .then( () => initTranslator( survey ) )
         .then( connection.getFormParts )
         .then( _swapTheme )
         .then( _addBranding )
@@ -199,10 +200,11 @@ function _init( formParts ) {
         modelStr: formParts.model,
         instanceStr: _prepareInstance( formParts.model, settings.defaults ),
         external: formParts.externalData,
+        survey: formParts,
     } )
         .then( form => {
             formParts.languages = form.languages;
-            formParts.htmlView = formEl;
+
             document.querySelector( 'head>title' ).textContent = utils.getTitleFromFormStr( formParts.form );
             if ( settings.print ) {
                 gui.applyPrintStyle();
@@ -210,6 +212,6 @@ function _init( formParts ) {
             // after widgets have been initialized, localize all data-i18n elements
             localize( formEl );
 
-            return  formParts;
+            return formParts;
         } );
 }
