@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## 3.2.0 - 2022-05-06
+
+##### Changed
+
+-   Check online status rather than disabling upload button in offline-capable mode (#410)
+-   Add configurable security headers (#402)
+-   Optionally exclude non-relevant values in calculations and submissions (enketo-core#870)
+-   Optionally recompute the evaluation cascade asynchronously (enketo-core#881)
+-   Improve form initialization performance by calculating repeats only once (enketo-core#887)
+-   Fixed mangling of markdown-produced HTML next to top-level text nodes when a mediamap is provided (enketo-transformer#150)
+
 ## 3.1.1 - 2022-04-21
 
 -   Improve errors for missing external instances in preview mode (#400)
