@@ -1,3 +1,4 @@
+const cluster = require('cluster');
 const config = require('../models/config-model').server;
 const transformer = require('enketo-transformer');
 
@@ -110,8 +111,115 @@ const replaceMediaSources = (survey) => {
     };
 };
 
+/**
+ * @param {string} requestProtocol
+ * @param {string | URL} expected
+ * @param {string | URL} actual
+ */
+const isSameHost = (requestProtocol, expected, actual) => {
+    const expectedURL = new URL(
+        /^https?:\/\//.test(expected)
+            ? expected
+            : `${requestProtocol}:${expected}`
+    );
+
+    const { host: expectedHost } = expectedURL;
+    const { host: actualHost } = new URL(actual);
+
+    return actualHost === expectedHost;
+};
+
+/**
+ * @typedef HostMatchesOptions
+ * @property {boolean} [asPattern]
+ */
+
+/**
+ * @param {import('express').Request} request
+ * @param {string | URL} expected
+ * @param {string | URL} actual
+ * @param {HostMatchesOptions} [options]
+ */
+const hostMatches = (request, expected, actual, options = {}) => {
+    const { protocol: requestProtocol } = request;
+    const ensureSSL =
+        !request.app.get('linked form and data server').authentication[
+            'allow insecure transport'
+        ] || requestProtocol === 'https';
+    const { protocol: actualProtocol, host: actualHost } = new URL(actual);
+
+    if (ensureSSL && actualProtocol !== 'https:') {
+        return false;
+    }
+
+    if (options.asPattern) {
+        const expectedPattern = new RegExp(expected);
+
+        return expectedPattern.test(actualHost);
+    }
+
+    return isSameHost(requestProtocol, expected, actual);
+};
+
+/** @type {Set<string>} */
+let mediaHosts = new Set();
+
+/**
+ * @private
+ * Used for test isolation
+ */
+const resetMediaHosts = () => {
+    mediaHosts = new Set();
+};
+
+/**
+ * @param {string} downloadUrl
+ */
+const addMediaHost = (downloadUrl) => {
+    const { host } = new URL(downloadUrl);
+
+    mediaHosts.add(host);
+
+    if (cluster.workers != null) {
+        for (const worker of Object.values(cluster.workers)) {
+            worker.send({
+                type: 'addMediaHost',
+                data: host,
+            });
+        }
+    }
+};
+
+if (cluster.worker != null) {
+    cluster.worker.on('message', (message) => {
+        if (message?.type === 'addMediaHost') {
+            addMediaHost(message.data);
+        }
+    });
+}
+
+/**
+ * @param {import('express').Request} request
+ * @param {string} url
+ * @return {boolean}
+ */
+const isMediaURL = (request, url) => {
+    const { mediaHosts: configuredHosts, 'server url': serverURL } =
+        request.app.get('linked form and data server');
+    const allHosts = [...configuredHosts, ...mediaHosts];
+
+    if (allHosts.length > 0) {
+        return allHosts.some((origin) => hostMatches(request, origin, url));
+    }
+
+    return hostMatches(request, serverURL, url, { asPattern: true });
+};
+
 module.exports = {
+    addMediaHost,
+    isMediaURL,
     replaceMediaSources,
+    resetMediaHosts,
     toLocalMediaUrl,
     toMediaMap,
 };

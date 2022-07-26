@@ -14,6 +14,7 @@ const {
     RequestFilteringHttpAgent,
     RequestFilteringHttpsAgent,
 } = require('request-filtering-agent');
+const { isMediaURL } = require('../lib/url');
 
 module.exports = (app) => {
     app.use(`${app.get('base path')}/media`, router);
@@ -48,8 +49,14 @@ function _isPrintView(req) {
  * @param {Function} next - Express callback
  */
 function getMedia(req, res, next) {
+    const mediaURL = _extractMediaUrl(req.url.substring('/get/'.length));
+
+    if (!isMediaURL(req, mediaURL)) {
+        return _handleMediaRequestError({ status: 404 }, next);
+    }
+
     const options = communicator.getUpdatedRequestOptions({
-        url: _extractMediaUrl(req.url.substring('/get/'.length)),
+        url: mediaURL,
         auth: user.getCredentials(req),
         headers: {
             cookie: req.headers.cookie,

@@ -11,6 +11,7 @@ const Xml2Js = require('xml2js');
 
 const parser = new Xml2Js.Parser();
 const { getCurrentRequest } = require('./context');
+const { addMediaHost } = require('./url');
 
 const TIMEOUT = config.timeout;
 
@@ -101,6 +102,10 @@ function getManifest(survey) {
                           _simplifyFormObj(file)
                       )
                     : [];
+
+            for (const item of survey.manifest) {
+                addMediaHost(item.downloadUrl);
+            }
 
             return survey;
         });
