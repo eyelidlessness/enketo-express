@@ -4,13 +4,17 @@
 
 const request = require('request');
 const { Auth } = require('request/lib/auth');
-const TError = require('./custom-error').TranslatedError;
-const config = require('../models/config-model').server;
-const debug = require('debug')('openrosa-communicator');
+const requestFilteringAgent = require('request-filtering-agent');
+const url = require('url');
 const Xml2Js = require('xml2js');
+const debug = require('debug')('openrosa-communicator');
+const TError = require('./custom-error').TranslatedError;
+const urlLib = require('./url');
+const config = require('../models/config-model').server;
+const user = require('../models/user-model');
 
 const parser = new Xml2Js.Parser();
-const { getCurrentRequest } = require('./context');
+const context = require('./context');
 
 const TIMEOUT = config.timeout;
 
@@ -73,6 +77,218 @@ function getXForm(survey) {
 }
 
 /**
+ * @typedef {import('request').Options} RequestOptions
+ */
+
+/**
+ * @typedef {import('request').RequestResponse} RequestResponse
+ */
+
+/**
+ * @typedef AsyncResponse
+ * @property {number} statusCode
+ * @property {Record<string, string>} headers
+ * @property {unknown} [body]
+ */
+
+/**
+ * Similar in intent to {@link _request}, but returns the full response object,
+ * with `headers` intact, and with `body` added. Returns an artificial response
+ * object when receiving no response (likely a 204 No Content response).
+ *
+ * @param {RequestOptions} options
+ * @return {Promise<AsyncResponse>}
+ */
+const requestAsync = (options) => {
+    // Due to a bug in request/request using options.method with
+    // Digest Auth we won't pass method as an option
+    const { method = 'get', ...restOptions } = options;
+
+    return new Promise((resolve, reject) => {
+        request[method](restOptions, (error, response, body) => {
+            if (error != null) {
+                return reject(error);
+            }
+
+            if (response == null) {
+                return {
+                    status: 204,
+                    headers: {},
+                };
+            }
+
+            resolve({
+                ...response,
+
+                // Headers are lost after the request completes.
+                // Passing them explicitly preserves them.
+                headers: response.headers,
+                body,
+            });
+        });
+    });
+};
+
+const EMPTY_RESPONSE_DATA_URL = 'data:text/plain,';
+
+/**
+ * @param {RequestOptions} options
+ */
+const requestDataURL = async (options) => {
+    const { body, headers } = await requestAsync(options);
+
+    let contentType = headers['content-type'];
+
+    if (contentType === 'null' && options.url.endsWith('.geojson')) {
+        contentType = 'application/geo+json';
+    }
+
+    return urlLib.toDataURL(contentType, body ?? Buffer.from(''));
+};
+
+/**
+ * @param {import('express').Request} req
+ */
+const isPrintView = (req) => {
+    const refererQuery =
+        req.headers && req.headers.referer
+            ? url.parse(req.headers.referer).query
+            : null;
+
+    return !!(refererQuery && refererQuery.includes('print=true'));
+};
+
+/**
+ * @param {import('express').Request} currentRequest
+ * @param {string} mediaURL
+ */
+const requestMedia = async (currentRequest, mediaURL) => {
+    const options = getUpdatedRequestOptions({
+        url: mediaURL,
+        auth: user.getCredentials(currentRequest),
+        headers: {
+            cookie: currentRequest.headers.cookie,
+        },
+
+        // Ensures response body is a `Buffer` instance containing
+        // the response body's raw data. Otherwise `request` will
+        // attempt to detect the response encoding, sometimes
+        // corrupting it when detection is incorrect.
+        encoding: null,
+    });
+
+    // filtering agent to stop private ip access to HEAD and GET
+    if (options.url.startsWith('https')) {
+        options.agent = new requestFilteringAgent.RequestFilteringHttpsAgent(
+            currentRequest.app.get('ip filtering')
+        );
+    } else {
+        options.agent = new requestFilteringAgent.RequestFilteringHttpAgent(
+            currentRequest.app.get('ip filtering')
+        );
+    }
+
+    if (isPrintView(currentRequest)) {
+        const { headers } = await requestAsync({
+            ...options,
+            method: 'head',
+        });
+        const contentType = headers['content-type'];
+
+        if (
+            contentType.startsWith('audio') ||
+            contentType.startsWith('video')
+        ) {
+            return EMPTY_RESPONSE_DATA_URL;
+        }
+
+        return requestDataURL(options);
+    }
+
+    return requestDataURL(options);
+};
+
+/**
+ * Media requests are made concurrently, but the concurrency is limited
+ * to 8 requests at a time to avoid overloading the media host. We may
+ * relax this in the future, or make it configurable, or limit concurrency
+ * across all processes. But for now the limit is defined here and effective
+ * for each process, to gather feedback.
+ */
+const MAX_CONCURRENT_MEDIA_REQUESTS = 8;
+
+/**
+ * @template T
+ * @callback Limit
+ * @param {() => T | Promise<T>}
+ * @return {() => Promise<T>}
+ */
+
+/** @type {Map<string, Promise<Limit<any>>>} */
+const concurrencyLimiters = new Map();
+
+/**
+ * @param {string} urlStr
+ * @return {Promise<Limit<any>>}
+ */
+const getConcurrencyLimiter = (urlStr) => {
+    const { origin } = new URL(urlStr);
+
+    let result = concurrencyLimiters.get(origin);
+
+    if (result == null) {
+        result = import('p-limit').then(({ default: pLimit }) =>
+            pLimit(MAX_CONCURRENT_MEDIA_REQUESTS)
+        );
+
+        concurrencyLimiters.set(origin, result);
+    }
+
+    return result;
+};
+
+/**
+ * @param {import('express').Request} currentRequest
+ * @param {string} mediaURL
+ */
+const requestMediaConcurrently = async (currentRequest, mediaURL) => {
+    const limit = await getConcurrencyLimiter(mediaURL);
+
+    return limit(requestMedia, currentRequest, mediaURL);
+};
+
+/**
+ * Given a `mediaMap` where:
+ *
+ * - The key is a file name referenced by `jr:` URLs in a form or by
+ *   instance attachments
+ *
+ * - The value is a media URL provided by the form server in a manifest
+ *   or instance request
+ *
+ * Returns a new map by requesting each media URL, and providing a
+ * `data:` URL equivalent.
+ *
+ * @param {import('express').Request} currentRequest
+ * @param {Record<string, string>} mediaMap
+ */
+const requestDataURLMediaMap = async (currentRequest, mediaMap) => {
+    const entries = Object.entries(mediaMap);
+    const dataEntries = await Promise.all(
+        entries.map(async ([key, mediaURL]) => {
+            const media = await requestMediaConcurrently(
+                currentRequest,
+                mediaURL
+            );
+
+            return [urlLib.escapeMediaURL(key), urlLib.escapeMediaURL(media)];
+        })
+    );
+
+    return Object.fromEntries(dataEntries);
+};
+
+/**
  * Obtains the XForm manifest
  *
  * @static
@@ -86,6 +302,7 @@ function getManifest(survey) {
             manifest: [],
         });
     }
+
     return _request({
         url: survey.info.manifestUrl,
         auth: survey.credentials,
@@ -95,12 +312,29 @@ function getManifest(survey) {
     })
         .then(_xmlToJson)
         .then((obj) => {
-            survey.manifest =
+            const currentRequest = context.getCurrentRequest();
+            const manifest =
                 obj.manifest && obj.manifest.mediaFile
                     ? obj.manifest.mediaFile.map((file) =>
                           _simplifyFormObj(file)
                       )
                     : [];
+            const manifestMediaMap = Object.fromEntries(
+                manifest.map(({ filename, downloadUrl }) => [
+                    filename,
+                    downloadUrl,
+                ])
+            );
+
+            return Promise.all([
+                survey,
+                manifest,
+                requestDataURLMediaMap(currentRequest, manifestMediaMap),
+            ]);
+        })
+        .then(([survey, manifest, media]) => {
+            survey.manifest = manifest;
+            survey.media = media;
 
             return survey;
         });
@@ -267,7 +501,7 @@ const sanitizeHeader = (value) =>
  */
 const getUpdatedRequestHeaders = (
     headers = {},
-    currentRequest = getCurrentRequest()
+    currentRequest = context.getCurrentRequest()
 ) => {
     const clientUserAgent = currentRequest?.headers['user-agent'];
     const serverUserAgent = `Enketo/${config.version}`;
@@ -452,6 +686,7 @@ function _simplifyFormObj(formObj) {
 }
 
 module.exports = {
+    requestDataURLMediaMap,
     getXFormInfo,
     getXForm,
     getManifest,

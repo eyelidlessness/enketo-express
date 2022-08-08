@@ -69,16 +69,6 @@ function get({ enketoId }) {
  * @param {Survey} survey
  * @return {Promise<Survey>}
  */
-function prepareOfflineSurvey(survey) {
-    return Promise.resolve(_swapMediaSrc(survey)).then(
-        _addBinaryDefaultsAndUpdateModel
-    );
-}
-
-/**
- * @param {Survey} survey
- * @return {Promise<Survey>}
- */
 const updateSurveyCache = (survey) =>
     (isLastSaveEnabled(survey)
         ? Promise.resolve(survey)
@@ -90,10 +80,7 @@ const updateSurveyCache = (survey) =>
  * @return {Promise<Survey>}
  */
 function set(survey) {
-    return connection
-        .getFormParts(survey)
-        .then(prepareOfflineSurvey)
-        .then(store.survey.set);
+    return connection.getFormParts(survey).then(store.survey.set);
 }
 
 /**
@@ -193,85 +180,6 @@ function _setUpdateIntervals(survey) {
 }
 
 /**
- * Handles loading form media for newly added repeats.
- *
- * @param { Survey } survey - survey object
- * @return { Promise<Survey> }
- */
-function _setRepeatListener(survey) {
-    // Instantiate only once, after loadMedia has been completed (once)
-    document
-        .querySelector('form.or')
-        .addEventListener(events.AddRepeat().type, (event) => {
-            _loadMedia(survey, [event.target]);
-        });
-
-    return Promise.resolve(survey);
-}
-
-/**
- * Changes src attributes in view to data-offline-src to facilitate loading those resources
- * from the browser storage.
- *
- * @param { Survey } survey - survey object
- * @return { Survey }
- */
-function _swapMediaSrc(survey) {
-    survey.form = survey.form.replace(
-        /(src="[^"]*")/g,
-        'data-offline-$1 src=""'
-    );
-
-    return survey;
-}
-
-/**
- * Loads all default binary files and adds them to the survey object. It removes the src
- * attributes from model nodes with default binary files.
- *
- * @param { Survey } survey - survey object
- * @return { Promise<Survey> }
- */
-function _addBinaryDefaultsAndUpdateModel(survey) {
-    // The mechanism for default binary files is as follows:
-    // 1. They are stored as binaryDefaults in the resources table with the key being comprised of the VALUE (i.e. jr:// url)
-    // 2. Filemanager.getFileUrl will determine whether to load from (survey) resources of (record) files
-
-    const model = new DOMParser().parseFromString(survey.model, 'text/xml');
-    const binaryDefaultElements = [
-        ...model.querySelectorAll('instance:first-child > * *[src]'),
-    ];
-    const tasks = [];
-    survey.binaryDefaults = [];
-
-    binaryDefaultElements.forEach((el) => {
-        tasks.push(
-            connection
-                .getMediaFile(el.getAttribute('src'))
-                .then((result) => {
-                    // Overwrite the url to use the jr://images/img.png value. This makes the magic happen.
-                    // It causes a jr:// value to be treated the same as a filename.ext value.
-                    result.url = el.textContent;
-                    survey.binaryDefaults.push(result);
-                    // Now the src attribute should be removed because the filemanager.js can return the blob for
-                    // the jr://images/... key (as if it is a file).
-                    el.removeAttribute('src');
-                })
-                .catch((e) => {
-                    // let files fail quietly. Rely on Enketo Core to show error.
-                    console.error(e);
-                })
-        );
-    });
-
-    return Promise.all(tasks).then(() => {
-        survey.model = new XMLSerializer().serializeToString(model);
-
-        return survey;
-    });
-}
-
-/**
  * Updates maximum submission size if this hasn't been defined yet.
  * The first time this function is called is when the user is online.
  * If the form/data server updates their max size setting, this value
@@ -297,144 +205,10 @@ function updateMaxSubmissionSize(survey) {
 }
 
 /**
- * Loads survey resources either from the store or via HTTP (and stores them).
- *
- * @param { Survey } survey - survey object
- * @return { Promise<Survey> }
- */
-function updateMedia(survey) {
-    const containers = [document.querySelector('form.or')];
-    const formHeader = document.querySelector('.form-header');
-    if (formHeader) {
-        containers.push(formHeader);
-    }
-
-    return _loadMedia(survey, containers)
-        .then((resources) => {
-            // if all resources were already in the database, _loadMedia returned undefined
-            if (resources) {
-                // Filter out the failed requests (undefined)
-                survey.resources = resources.filter((resource) => !!resource);
-
-                // Store any resources that are now available for this form.
-                console.log('Survey media has been updated. Updating cache.');
-                return updateSurveyCache(survey);
-            }
-            return survey;
-        })
-        .then(_setRepeatListener)
-        .catch((error) => {
-            console.error('updateMedia failed', error);
-
-            // Let the flow continue.
-            return survey;
-        });
-}
-
-/**
- * To be used with Promise.all if you want the results to be returned even if some
- * have failed. Failed tasks will return undefined.
- *
- * @param  { Promise } task - [description]
- * @return { object }         [description]
- */
-function _reflect(task) {
-    return task.then(
-        (response) => response,
-        (error) => {
-            console.error(error);
-        }
-    );
-}
-
-/**
  * @typedef Resource
  * @property {string} url URL to resource
  * @property {Blob} item resource as Blob
  */
-
-/**
- * Loads and displays survey resources either from the store or via HTTP.
- *
- * @param { Survey } survey - survey object
- * @param { [Element]} targetContainers - HTML container elements to load media into
- * @return { Promise<[Resource] | undefined> }
- */
-function _loadMedia(survey, targetContainers) {
-    let updated = false;
-
-    const requests = [];
-    _getElementsGroupedBySrc(targetContainers).forEach((elements) => {
-        const src = elements[0].dataset.offlineSrc;
-
-        const request = store.survey.resource
-            .get(survey.enketoId, src)
-            .then(async (resource) => {
-                if (!resource || !resource.item) {
-                    // no need to try/catch here as we don't care about catching failures
-                    const downloaded = await connection.getMediaFile(src);
-                    // only when successful
-                    updated = true;
-                    return downloaded;
-                }
-                return resource;
-            })
-            // render the media
-            .then((resource) => {
-                if (resource.item) {
-                    // create a resourceURL
-                    const resourceUrl = URL.createObjectURL(resource.item);
-                    // add this resourceURL as the src for all elements in the group
-                    elements.forEach((element) => {
-                        element.src = resourceUrl;
-                    });
-                }
-                return resource;
-            })
-            .catch((error) => {
-                console.error(error);
-            });
-
-        requests.push(request);
-    });
-
-    return Promise.all(requests.map(_reflect)).then((resources) => {
-        if (updated) {
-            return resources;
-        }
-    });
-}
-
-function _getElementsGroupedBySrc(containers) {
-    const groupedElements = [];
-    const urls = {};
-    let els = [];
-
-    containers.forEach(
-        (container) =>
-            (els = els.concat([
-                ...container.querySelectorAll('[data-offline-src]'),
-            ]))
-    );
-
-    els.forEach((el) => {
-        if (!urls[el.dataset.offlineSrc]) {
-            const src = el.dataset.offlineSrc;
-            const group = els.filter((e) => {
-                if (e.dataset.offlineSrc === src) {
-                    // remove from $els to improve performance
-                    // els = els.filter( es => !es.matches( `[data-offline-src="${src}"]` ) );
-                    return true;
-                }
-            });
-
-            urls[src] = true;
-            groupedElements.push(group);
-        }
-    });
-
-    return groupedElements;
-}
 
 /**
  * @param {Survey} survey
@@ -464,7 +238,6 @@ function _updateCache(survey) {
 
                         return formParts;
                     })
-                    .then(prepareOfflineSurvey)
                     .then(updateSurveyCache)
                     .then((result) => {
                         // set the hash so that subsequent update checks won't redownload the form
@@ -526,7 +299,6 @@ export default {
     init,
     get,
     updateMaxSubmissionSize,
-    updateMedia,
     remove,
     flush,
     CACHE_UPDATE_INITIAL_DELAY,

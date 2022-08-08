@@ -9,11 +9,9 @@ import settings from './settings';
 import connection from './connection';
 import utils from './utils';
 import { t } from './translator';
+import { getMediaURL } from './url';
 
 const URL_RE = /[a-zA-Z0-9+-.]+?:\/\//;
-
-/** @type {Record<string, string>} */
-let instanceAttachments;
 
 /**
  * Initialize the file manager .
@@ -34,15 +32,6 @@ function isWaitingForPermissions() {
 }
 
 /**
- * Sets instanceAttachments containing filename:url map
- * to use in getFileUrl
- *
- * @param {{filename: string}} attachments - attachments sent with record to be loaded
- */
-function setInstanceAttachments(attachments) {
-    instanceAttachments = attachments;
-}
-/**
  * Obtains a url that can be used to show a preview of the file when used
  * as a src attribute.
  *
@@ -54,26 +43,12 @@ function getFileUrl(subject) {
         if (!subject) {
             resolve(null);
         } else if (typeof subject === 'string') {
-            const escapedSubject = encodeURIComponent(subject);
+            const mediaURL = getMediaURL(subject);
 
-            if (subject.startsWith('/')) {
+            if (mediaURL != null) {
+                resolve(mediaURL);
+            } else if (subject.startsWith('/')) {
                 resolve(subject);
-            } else if (
-                instanceAttachments &&
-                Object.prototype.hasOwnProperty.call(
-                    instanceAttachments,
-                    escapedSubject
-                )
-            ) {
-                resolve(instanceAttachments[escapedSubject]);
-            } else if (
-                instanceAttachments &&
-                Object.prototype.hasOwnProperty.call(
-                    instanceAttachments,
-                    subject
-                )
-            ) {
-                resolve(instanceAttachments[subject]);
             } else if (!settings.offline || !store.available) {
                 // e.g. in an online-only edit view
                 reject(new Error('store not available'));
@@ -270,7 +245,6 @@ function getMaxSizeReadable() {
 export default {
     isWaitingForPermissions,
     init,
-    setInstanceAttachments,
     getFileUrl,
     getObjectUrl,
     getCurrentFiles,

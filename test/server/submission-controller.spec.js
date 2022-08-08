@@ -6,9 +6,13 @@
 // safer to ensure this here (in addition to grunt:env:test)
 process.env.NODE_ENV = 'test';
 
+const { expect } = require('chai');
+const nock = require('nock');
 const request = require('supertest');
 const redis = require('redis');
+const sinon = require('sinon');
 const app = require('../../config/express');
+const context = require('../../app/lib/context');
 const surveyModel = require('../../app/models/survey-model');
 const instanceModel = require('../../app/models/instance-model');
 const config = require('../../app/models/config-model').server;
@@ -173,6 +177,69 @@ describe('Submissions', () => {
                 request(app)
                     .get(`/submission/${enketoId}?instanceId=c`)
                     .expect(200, done);
+            });
+        });
+    });
+
+    describe('instance attachments', () => {
+        /** @type {import('sinon').SinonSandbox} */
+        let sandbox;
+
+        beforeEach(() => {
+            sandbox = sinon.createSandbox();
+        });
+
+        afterEach(() => {
+            sandbox.restore();
+        });
+
+        it('assigns a media mapping of instance attachments with data: URLs of the response body from each attachment URL', async () => {
+            const mediaFileName = 'external instance.xml';
+            const mediaServer = 'https://example.com';
+            const mediaPath = '/johndoe/formmedia/dyn.xml';
+            const mediaURL = `${mediaServer}${mediaPath}`;
+
+            await instanceModel.set({
+                openRosaServer: validServer,
+                openRosaId: validFormId,
+                instanceId: 'b',
+                returnUrl: 'example.com',
+                instance: '<data></data>',
+                instanceAttachments: {
+                    [mediaFileName]: mediaURL,
+                },
+            });
+
+            const survey = {
+                openRosaServer: validServer,
+                openRosaId: validFormId,
+                info: {},
+                form: '<form>some form</form>',
+                model: '<data>some model</data>',
+            };
+
+            const mediaBody = JSON.stringify(survey);
+            const mediaContentType = 'application/json';
+
+            nock(mediaServer).get(mediaPath).reply(200, mediaBody, {
+                'content-type': mediaContentType,
+            });
+
+            sandbox.stub(context, 'getCurrentRequest').callsFake(() => ({
+                app,
+                headers: {},
+                signedCookies: {},
+            }));
+
+            const { body } = await request(app).get(
+                `/submission/${enketoId}?instanceId=b`
+            );
+
+            const mediaData = Buffer.from(mediaBody).toString('base64');
+            const expectedMediaDataURL = `data:${mediaContentType};base64,${mediaData}`;
+
+            expect(body.instanceAttachments).to.deep.equal({
+                'external%20instance.xml': expectedMediaDataURL,
             });
         });
     });

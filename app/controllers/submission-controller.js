@@ -13,7 +13,6 @@ const utils = require('../lib/utils');
 
 const router = express.Router();
 const routerUtils = require('../lib/router-utils');
-const { toLocalMediaUrl } = require('../lib/url');
 // var debug = require( 'debug' )( 'submission-controller' );
 
 module.exports = (app) => {
@@ -168,26 +167,27 @@ function getInstance(req, res, next) {
                 .then((survey) => {
                     // check if found instance actually belongs to the form
                     if (utils.getOpenRosaKey(survey) === survey.openRosaKey) {
-                        // Change URLs of instanceAttachments to local URLs
-                        Object.keys(survey.instanceAttachments).forEach(
-                            (key) =>
-                                (survey.instanceAttachments[key] =
-                                    toLocalMediaUrl(
-                                        survey.instanceAttachments[key]
-                                    ))
-                        );
+                        const { instanceAttachments } = survey;
 
-                        res.json({
-                            instance: survey.instance,
-                            instanceAttachments: survey.instanceAttachments,
-                        });
-                    } else {
-                        const error = new Error(
-                            "Instance doesn't belong to this form"
-                        );
-                        error.status = 400;
-                        throw error;
+                        return Promise.all([
+                            survey.instance,
+                            communicator.requestDataURLMediaMap(
+                                req,
+                                instanceAttachments
+                            ),
+                        ]);
                     }
+                    const error = new Error(
+                        "Instance doesn't belong to this form"
+                    );
+                    error.status = 400;
+                    throw error;
+                })
+                .then(([instance, instanceAttachments]) => {
+                    res.json({
+                        instance,
+                        instanceAttachments,
+                    });
                 })
                 .catch(next);
         })

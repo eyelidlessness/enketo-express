@@ -13,7 +13,6 @@ const utils = require('../lib/utils');
 const routerUtils = require('../lib/router-utils');
 const express = require('express');
 const url = require('url');
-const { replaceMediaSources } = require('../lib/url');
 
 const router = express.Router();
 
@@ -51,7 +50,7 @@ function getSurveyParts(req, res, next) {
         .then((survey) => {
             if (survey.info) {
                 // A request with "xformUrl" body parameter was used (unlaunched form)
-                _getFormDirectly(survey)
+                getFormDirectly(survey)
                     .then((survey) => {
                         _respond(res, survey);
                     })
@@ -103,12 +102,23 @@ function getSurveyHash(req, res, next) {
  * @return { Promise<module:survey-model~SurveyObject> } a Promise resolving with survey object with form transformation result
  *
  */
-function _getFormDirectly(survey) {
-    return communicator
-        .getXForm(survey)
-        .then(communicator.getManifest)
-        .then(transformer.transform);
-}
+const getFormDirectly = async (survey) => {
+    // Transformer `delete`s `survey.media`. In cases where manifest and media
+    // have already been requested, this ensures that they're preserved, and
+    // that we don't perform the same requests twice.
+    const { manifest, media, ...xForm } = await communicator.getXForm(survey);
+    const transformed = await transformer.transform(xForm);
+
+    if (manifest != null && media != null) {
+        return {
+            ...transformed,
+            manifest,
+            media,
+        };
+    }
+
+    return communicator.getManifest(transformed);
+};
 
 /**
  * @param {module:survey-model~SurveyObject} survey - survey object
@@ -150,7 +160,7 @@ function _updateCache(survey) {
                 delete survey.mediaUrlHash;
                 delete survey.formHash;
 
-                return _getFormDirectly(survey).then(cacheModel.set);
+                return getFormDirectly(survey).then(cacheModel.set);
             }
 
             return survey;
@@ -217,11 +227,10 @@ function _checkQuota(survey) {
 function _respond(res, survey) {
     delete survey.credentials;
 
-    survey = replaceMediaSources(survey);
-
     res.status(200);
     res.send({
         form: survey.form,
+        media: survey.media,
         // previously this was JSON.stringified, not sure why
         model: survey.model,
         theme: survey.theme,

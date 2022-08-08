@@ -14,6 +14,7 @@ module.exports = (config) => {
 
         // list of files / patterns to load in the browser
         files: [
+            'test/client/config/global-setup-teardown.js',
             {
                 pattern: 'public/js/src/**/*.js',
                 included: false,

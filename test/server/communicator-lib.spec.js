@@ -5,12 +5,15 @@ const nock = require('nock');
 const chai = require('chai');
 const express = require('express');
 const request = require('supertest');
+const requestFilteringAgent = require('request-filtering-agent');
 
 const { expect } = chai;
 const { Auth } = require('request/lib/auth');
-const communicator = require('../../app/lib/communicator');
-const config = require('../../app/models/config-model').server;
 const sinon = require('sinon');
+const app = require('../../config/express');
+const communicator = require('../../app/lib/communicator');
+const context = require('../../app/lib/context');
+const config = require('../../app/models/config-model').server;
 const { requestContextMiddleware } = require('../../app/lib/context');
 
 describe('Communicator Library', () => {
@@ -34,6 +37,11 @@ describe('Communicator Library', () => {
             .stub(config, 'query parameter to pass to submission')
             .get(() => customQueryParameter);
         sandbox.stub(config, 'version').get(() => version);
+    });
+
+    afterEach(() => {
+        sandbox.restore();
+        nock.cleanAll();
     });
 
     describe('getXFormInfo function', () => {
@@ -240,7 +248,7 @@ describe('Communicator Library', () => {
     });
 
     describe('getManifest function', () => {
-        it('should assign manifest to survey object', (done) => {
+        it('should assign manifest to survey object', async () => {
             const survey = {
                 openRosaServer: 'https://testserver.com/bob',
                 openRosaId: 'widgets',
@@ -264,18 +272,181 @@ describe('Communicator Library', () => {
                 .reply(200, manifestXML);
 
             const updatedSurvey = JSON.parse(JSON.stringify(survey));
+            const mediaServer = 'https://example.com';
+            const mediaPath = '/johndoe/formmedia/dyn.xml';
+
             updatedSurvey.manifest = [
                 {
                     filename: 'dyn.xml',
                     hash: 'md5:3c13dacb1b36c210b996ae307030c684',
-                    downloadUrl:
-                        'https://example.com/johndoe/formmedia/dyn.xml',
+                    downloadUrl: `${mediaServer}${mediaPath}`,
                 },
             ];
 
-            communicator.getManifest(survey).then((response) => {
-                expect(response).to.deep.equal(updatedSurvey);
-                done();
+            nock(mediaServer).get(mediaPath).reply(200, 'anything', {
+                'content-type': 'text/plain',
+            });
+
+            sandbox.stub(context, 'getCurrentRequest').callsFake(() => ({
+                app,
+                headers: {},
+                signedCookies: {},
+            }));
+
+            const response = await communicator.getManifest(survey);
+
+            expect(response.manifest).to.deep.equal(updatedSurvey.manifest);
+        });
+
+        it("assigns a media mapping from a manifest item's `filename` to a data: URL of the response body from the item's `downloadUrl`", async () => {
+            const survey = {
+                openRosaServer: 'https://testserver.com/bob',
+                openRosaId: 'widgets',
+                info: {
+                    manifestUrl: 'https://my.openrosa.server/manifest1',
+                },
+                form: '<form>some form</form>',
+                model: '<data>some model</data>',
+            };
+
+            const mediaFileName = 'external instance.xml';
+            const mediaServer = 'https://example.com';
+            const mediaPath = '/johndoe/formmedia/dyn.xml';
+            const mediaURL = `${mediaServer}${mediaPath}`;
+
+            const manifestXML = `
+                <manifest xmlns="http://openrosa.org/xforms/xformsManifest">
+                    <mediaFile>
+                        <filename>${mediaFileName}</filename>
+                        <hash>md5:3c13dacb1b36c210b996ae307030c684</hash>
+                        <downloadUrl>${mediaURL}</downloadUrl>
+                    </mediaFile>
+                </manifest>
+            `;
+            nock('https://my.openrosa.server')
+                .get('/manifest1')
+                .reply(200, manifestXML);
+
+            const mediaBody = JSON.stringify(survey);
+            const mediaContentType = 'application/json';
+
+            nock(mediaServer).get(mediaPath).reply(200, mediaBody, {
+                'content-type': mediaContentType,
+            });
+
+            sandbox.stub(context, 'getCurrentRequest').callsFake(() => ({
+                app,
+                headers: {},
+                signedCookies: {},
+            }));
+
+            const response = await communicator.getManifest(survey);
+
+            const mediaData = Buffer.from(mediaBody).toString('base64');
+            const expectedMediaDataURL = `data:${mediaContentType};base64,${mediaData}`;
+
+            expect(response.media).to.deep.equal({
+                'external%20instance.xml': expectedMediaDataURL,
+            });
+        });
+
+        const filteringAgentClasses = {
+            http: 'RequestFilteringHttpAgent',
+            https: 'RequestFilteringHttpsAgent',
+        };
+
+        Object.entries(filteringAgentClasses).forEach(([protocol, agent]) => {
+            it(`requests manifest media with a ${agent}, using the current "ip filtering" configuration`, async () => {
+                const survey = {
+                    openRosaServer: 'https://testserver.com/bob',
+                    openRosaId: 'widgets',
+                    info: {
+                        manifestUrl: 'https://my.openrosa.server/manifest1',
+                    },
+                    form: '<form>some form</form>',
+                    model: '<data>some model</data>',
+                };
+
+                const mediaFileName = 'external instance.xml';
+                const mediaServer = `${protocol}://example.com`;
+                const mediaPath = '/johndoe/formmedia/dyn.xml';
+                const mediaURL = `${mediaServer}${mediaPath}`;
+
+                const manifestXML = `
+                    <manifest xmlns="http://openrosa.org/xforms/xformsManifest">
+                        <mediaFile>
+                            <filename>${mediaFileName}</filename>
+                            <hash>md5:3c13dacb1b36c210b996ae307030c684</hash>
+                            <downloadUrl>${mediaURL}</downloadUrl>
+                        </mediaFile>
+                    </manifest>
+                `;
+                nock('https://my.openrosa.server')
+                    .get('/manifest1')
+                    .reply(200, manifestXML);
+
+                const mediaBody = JSON.stringify(survey);
+                const mediaContentType = 'application/json';
+
+                let requestAgent;
+
+                nock(mediaServer)
+                    .get(mediaPath)
+                    .reply(
+                        200,
+                        function () {
+                            requestAgent = this.req.options.agent;
+
+                            return mediaBody;
+                        },
+                        {
+                            'content-type': mediaContentType,
+                        }
+                    );
+
+                sandbox.stub(context, 'getCurrentRequest').callsFake(() => ({
+                    app,
+                    headers: {},
+                    signedCookies: {},
+                }));
+
+                const ipFilteringConfig = {
+                    allowPrivateIPAddress: false,
+                    allowMetaIPAddress: false,
+                    allowIPAddressList: ['1.2.3.4'],
+                    denyIPAddressList: ['2.3.4.5'],
+                };
+
+                const baseAppGet = app.get.bind(app);
+
+                sandbox.stub(app, 'get').callsFake((key) => {
+                    if (key === 'ip filtering') {
+                        return ipFilteringConfig;
+                    }
+
+                    return baseAppGet(key);
+                });
+
+                let requestAgentOptions;
+
+                const AgentConstructor = class extends requestFilteringAgent[
+                    agent
+                ] {
+                    constructor(options) {
+                        super(options);
+
+                        requestAgentOptions = options;
+                    }
+                };
+
+                sandbox
+                    .stub(requestFilteringAgent, agent)
+                    .get(() => AgentConstructor);
+
+                await communicator.getManifest(survey);
+
+                expect(requestAgent instanceof AgentConstructor).to.equal(true);
+                expect(requestAgentOptions).to.deep.equal(ipFilteringConfig);
             });
         });
 

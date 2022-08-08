@@ -13,6 +13,7 @@ import {
     setLastSavedRecord,
 } from './last-saved';
 import { geoJSONExternalInstance } from './geojson';
+import { setMediaURLCache, getMediaURL } from './url';
 
 /**
  * @typedef {import('../../../../app/models/record-model').EnketoRecord} EnketoRecord
@@ -484,6 +485,8 @@ function getFormParts(props) {
             throw error;
         })
         .then((data) => {
+            setMediaURLCache(data);
+
             const model = parser.parseFromString(data.model, 'text/xml');
 
             const encryptedSubmission = model.querySelector(
@@ -587,7 +590,9 @@ function _encodeFormData(data) {
  * @return {Promise<{url: string, item: Blob}>} a Promise that resolves with a media file object
  */
 function getMediaFile(url) {
-    return fetch(url)
+    const mediaURL = getMediaURL(url);
+
+    return fetch(mediaURL ?? url)
         .then(_throwResponseError)
         .then((response) => response.blob())
         .then((item) => ({ url, item }))
@@ -616,9 +621,11 @@ function getMediaFile(url) {
  * @return {Promise<XMLDocument>} a Promise that resolves with an XML Document
  */
 function getDataFile(url, languageMap) {
+    const mediaURL = getMediaURL(url);
+
     let contentType;
 
-    return fetch(url)
+    return fetch(mediaURL ?? url)
         .then((response) => {
             contentType =
                 response.headers.get('Content-Type')?.split(';')[0] ?? '';
@@ -633,7 +640,9 @@ function getDataFile(url, languageMap) {
                 url.endsWith('.geojson')
             ) {
                 contentType = 'application/geo+json';
+            }
 
+            if (contentType === 'application/geo+json') {
                 return response.json();
             }
 

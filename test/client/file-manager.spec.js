@@ -1,6 +1,7 @@
 import fileManager from '../../public/js/src/module/file-manager';
 import settings from '../../public/js/src/module/settings';
 import store from '../../public/js/src/module/store';
+import { setMediaURLCache } from '../../public/js/src/module/url';
 
 describe('File manager', () => {
     /** @type {import('sinon').SinonSandbox} */
@@ -22,13 +23,12 @@ describe('File manager', () => {
         });
 
         describe('instance attachments', () => {
-            afterEach(() => {
-                fileManager.setInstanceAttachments(null);
-            });
-
             it('gets a URL from instance attachments by filename', async () => {
-                fileManager.setInstanceAttachments({
-                    'relative.png': 'https://example.com/path/to/relative.png',
+                setMediaURLCache({
+                    instanceAttachments: {
+                        'relative.png':
+                            'https://example.com/path/to/relative.png',
+                    },
                 });
 
                 const result = await fileManager.getFileUrl('relative.png');
@@ -39,43 +39,15 @@ describe('File manager', () => {
             });
 
             it('gets a URL from instance attachments by filename with a space', async () => {
-                fileManager.setInstanceAttachments({
-                    'space madness.png':
-                        'https://example.com/path/to/space%20madness.png',
+                setMediaURLCache({
+                    instanceAttachments: {
+                        'space madness.png':
+                            'https://example.com/path/to/space%20madness.png',
+                    },
                 });
 
                 const result = await fileManager.getFileUrl(
                     'space madness.png'
-                );
-
-                expect(result).to.equal(
-                    'https://example.com/path/to/space%20madness.png'
-                );
-            });
-
-            it('gets a URL from instance attachments by filename with an escaped space', async () => {
-                fileManager.setInstanceAttachments({
-                    'space%20madness.png':
-                        'https://example.com/path/to/space%20madness.png',
-                });
-
-                const result = await fileManager.getFileUrl(
-                    'space madness.png'
-                );
-
-                expect(result).to.equal(
-                    'https://example.com/path/to/space%20madness.png'
-                );
-            });
-
-            it('gets a URL from instance attachments by escaped filename with an escaped space', async () => {
-                fileManager.setInstanceAttachments({
-                    'space%20madness.png':
-                        'https://example.com/path/to/space%20madness.png',
-                });
-
-                const result = await fileManager.getFileUrl(
-                    'space%20madness.png'
                 );
 
                 expect(result).to.equal(

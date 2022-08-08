@@ -62,6 +62,13 @@ if (process.env.NODE_ENV === 'test') {
  */
 
 /**
+ * @typedef ManifestItem
+ * @property {string} filename
+ * @property {string} hash
+ * @property {string} downloadUrl
+ */
+
+/**
  * @typedef SurveyObject
  * @property { string } openRosaServer
  * @property { string } openRosaId
@@ -81,7 +88,7 @@ if (process.env.NODE_ENV === 'test') {
  * @property { string } [instanceId]
  * @property { EnketoRecord } [lastSavedRecord]
  * @property { Record<string, unknown> } [languageMap]
- * @property { Record<string, unknown> } [manifest]
+ * @property { ManifestItem[] } [manifest]
  * @property { string } [model]
  * @property { EnketoTransformerPreprocess } [preprocess]
  * @property { string } [returnUrl]

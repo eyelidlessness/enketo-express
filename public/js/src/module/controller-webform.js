@@ -18,8 +18,8 @@ import {
 } from './translator';
 import records from './records-queue';
 import encryptor from './encryptor';
-import formCache from './form-cache';
 import { getLastSavedRecord, populateLastSavedInstances } from './last-saved';
+import { setMediaURLCache, replaceMediaSources } from './url';
 
 /**
  * @typedef {import('../../../../app/models/survey-model').SurveyObject} Survey
@@ -56,6 +56,9 @@ const formOptions = {
  * @return {Promise<Form>}
  */
 function init(formEl, data, loadErrors = []) {
+    setMediaURLCache(data.survey);
+    replaceMediaSources(formEl);
+
     formData = data;
 
     return _initializeRecords()
@@ -67,10 +70,6 @@ function init(formEl, data, loadErrors = []) {
             }
 
             data.submitted = Boolean(data.isEditing);
-
-            if (data.instanceAttachments) {
-                fileManager.setInstanceAttachments(data.instanceAttachments);
-            }
 
             const langSelector = formEl.querySelector('#form-languages');
             const formDefaultLanguage = langSelector
@@ -90,6 +89,17 @@ function init(formEl, data, loadErrors = []) {
             }
 
             form = new Form(formEl, data, formOptions);
+
+            form.model.events.addEventListener(
+                events.InstanceFirstLoad().type,
+                () => {
+                    const modelRoot = form.model.xml;
+
+                    replaceMediaSources(modelRoot);
+                },
+                { once: true }
+            );
+
             loadErrors = loadErrors.concat(form.init());
 
             // Determine whether UI language should be attempted to be switched.
@@ -189,29 +199,13 @@ function _checkAutoSavedRecord() {
 }
 
 /**
- * @typedef ResetFormOptions
- * @property {boolean} [isOffline]
- */
-
-/**
  * Controller function to reset to the initial state of a form.
- *
- * Note: Previously this function accepted a boolean `confirmed` parameter, presumably
- * intending to block the reset behavior until user confirmation of save. But this
- * parameter was always passed as `true`. Relatedly, the `FormReset` event fired here
- * previously indirectly triggered `formCache.updateMedia` method, but it was triggered
- * with stale `survey` state, overwriting any changes to `survey.externalData`
- * referencing last-saved instances.
- *
- * That event listener has been removed in favor of calling `updateMedia` directly with
- * the current state of `survey` in offline mode. This change is being called out in
- * case the removal of that event listener impacts downstream forks.
  *
  * @param {Survey} survey
  * @param {ResetFormOptions} [options]
  * @return {Promise<void>}
  */
-function _resetForm(survey, options = {}) {
+function _resetForm(survey) {
     return getLastSavedRecord(survey.enketoId)
         .then((lastSavedRecord) =>
             populateLastSavedInstances(survey, lastSavedRecord)
@@ -231,10 +225,6 @@ function _resetForm(survey, options = {}) {
             const loadErrors = form.init();
 
             form.view.html.dispatchEvent(events.FormReset());
-
-            if (options.isOffline) {
-                formCache.updateMedia(survey);
-            }
 
             if (records) {
                 records.setActive(null);
@@ -293,8 +283,6 @@ function _loadRecord(survey, instanceId, confirmed) {
                 loadErrors = form.init();
 
                 form.view.html.dispatchEvent(events.FormReset());
-
-                formCache.updateMedia(survey);
 
                 form.recordName = record.name;
                 records.setActive(record.instanceId);
@@ -574,7 +562,7 @@ function _saveRecord(survey, draft, recordName, confirmed) {
         })
         .then(() => {
             records.removeAutoSavedRecord();
-            _resetForm(survey, { isOffline: true });
+            _resetForm(survey);
 
             if (draft) {
                 gui.alert(

@@ -75,6 +75,13 @@
         },
 
         {
+            "files": ["public/js/**/*.js"],
+            "rules": {
+                "import/prefer-default-export": "off"
+            }
+        },
+
+        {
             "files": ["app.js", "app/**/*.js", "!app/views/**/*.js"],
             "env": {
                 "browser": false,
