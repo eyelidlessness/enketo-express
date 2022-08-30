@@ -5,7 +5,7 @@ const chai = require('chai');
 
 const { expect } = chai;
 const chaiAsPromised = require('chai-as-promised');
-const { getStore } = require('../../app/lib/redis-stores');
+const { getStore } = require('../../app/lib/db');
 
 const model = require('../../app/models/cache-model');
 

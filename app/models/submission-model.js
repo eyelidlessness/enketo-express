@@ -3,7 +3,7 @@
  */
 
 const path = require('path');
-const { getStore } = require('../lib/redis-stores');
+const { getStore } = require('../lib/db');
 const config = require('./config-model').server;
 // var debug = require( 'debug' )( 'submission-model' );
 let logger;

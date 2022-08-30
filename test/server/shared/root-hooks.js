@@ -1,8 +1,8 @@
-const { initStores, getStore } = require('../../../app/lib/redis-stores');
+const { initStores, getStore } = require('../../../app/lib/db');
 
 module.exports = {
     mochaHooks: {
-        async beforeAll() {
+        beforeAll() {
             return initStores();
         },
 
