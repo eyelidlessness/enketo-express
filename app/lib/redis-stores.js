@@ -26,7 +26,7 @@ async function initStore(storeName) {
     // in test environment, switch to different db
     if (process.env.NODE_ENV === 'test') {
         await new Promise((resolve, reject) =>
-            client.select(15, (err, res) => err ? reject(err) : resolve(res))
+            client.select(15, (err, res) => (err ? reject(err) : resolve(res)))
         );
     }
 
