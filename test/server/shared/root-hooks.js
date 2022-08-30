@@ -1,37 +1,20 @@
 const { promisify } = require('util');
-const { flush, client } = require('../../../app/lib/db');
-
-const { REDIS_DB } = process.env;
-
-/** @type {number | null} */
-let redisDB = null;
-
-if (REDIS_DB != null && /^(\d|1[0-5])$/.test(REDIS_DB)) {
-    redisDB = Number(REDIS_DB);
-}
-
-const select = promisify(client.select).bind(client);
-
-const selectRedisDB = async () => {
-    if (redisDB != null) {
-        await select(redisDB);
-    }
-};
+const { flush, client } = require('../../../app/lib/redis-stores');
 
 module.exports = {
     mochaHooks: {
-        async beforeEach() {
-            await selectRedisDB();
+        beforeAll() {
+            return initStores();
         },
 
         async afterEach() {
-            await selectRedisDB();
-            await flush();
+            await redisStores.getStore('main').flush();
+            await redisStores.getStore('cache').flush();
         },
 
         afterAll() {
-            client.end(true);
-            client.unref();
+            redisStores.getStore('main').end(true);
+            redisStores.getStore('cache').end(true);
         },
     },
 };
