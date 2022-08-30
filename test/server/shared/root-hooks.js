@@ -1,20 +1,25 @@
-const { promisify } = require('util');
-const { flush, client } = require('../../../app/lib/redis-stores');
+const { initStores, getStore } = require('../../../app/lib/redis-stores');
 
 module.exports = {
     mochaHooks: {
-        beforeAll() {
+        async beforeAll() {
             return initStores();
         },
 
         async afterEach() {
-            await redisStores.getStore('main').flush();
-            await redisStores.getStore('cache').flush();
+            const main = await getStore('main');
+            await main.flush();
+
+            const cache = await getStore('cache');
+            await cache.flush();
         },
 
-        afterAll() {
-            redisStores.getStore('main').end(true);
-            redisStores.getStore('cache').end(true);
+        async afterAll() {
+            const main = await getStore('main');
+            main.client.end(true);
+
+            const cache = await getStore('cache');
+            cache.client.end(true);
         },
     },
 };

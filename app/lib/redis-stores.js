@@ -2,8 +2,12 @@ const redis = require('redis');
 const { promisify } = require('util');
 const config = require('../models/config-model').server;
 
-const stores = {
-};
+const stores = {};
+
+function initStores() {
+    stores.main = initStore('main');
+    stores.cache = initStore('cache');
+}
 
 async function initStore(storeName) {
     const client = redis.createClient(
@@ -19,14 +23,14 @@ async function initStore(storeName) {
     const expire = promisify(client.expire).bind(client);
     const flush = promisify(client.flushdb).bind(client);
 
-    await client.connect();
-
     // in test environment, switch to different db
     if (process.env.NODE_ENV === 'test') {
-        await new Promise((resolve, reject) => client.select(15, (err, res) => err ? reject(err) : resolve(res)));
+        await new Promise((resolve, reject) =>
+            client.select(15, (err, res) => err ? reject(err) : resolve(res))
+        );
     }
 
-    stores[storeName] = {
+    return {
         client,
         get,
         set,
@@ -35,16 +39,10 @@ async function initStore(storeName) {
     };
 }
 
-function initStores() {
-    return Promise.all([
-        initStore('main'),
-        initStore('cache'),
-    ]);
-}
-
 function getStore(storeName) {
     const store = stores[storeName];
-    if(!store) throw new Error(`Redis store '${storeName}' not initialised!`);
+    if (!store) throw new Error(`Redis store '${storeName}' not initialised!`);
+    return store;
 }
 
 module.exports = {

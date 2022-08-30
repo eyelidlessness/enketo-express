@@ -3,7 +3,7 @@
  */
 
 const transformer = require('enketo-transformer');
-const { client } = require('../lib/redis-stores').getStore('cache');
+const { getStore } = require('../lib/redis-stores');
 const utils = require('../lib/utils');
 
 const prefix = 'ca:';
@@ -19,7 +19,8 @@ const debug = require('debug')('cache-model');
  * @param {module:survey-model~SurveyObject} survey - survey object
  * @return {Promise<Error|null|module:survey-model~SurveyObject>} Promise that resolves with cached {@link module:survey-model~SurveyObject|SurveyObject} or `null`
  */
-function getSurvey(survey) {
+async function getSurvey(survey) {
+    const { client } = await getStore('cache');
     return new Promise((resolve, reject) => {
         if (!survey || !survey.openRosaServer || !survey.openRosaId) {
             const error = new Error(
@@ -62,7 +63,8 @@ function getSurvey(survey) {
  * @param {module:survey-model~SurveyObject} survey - survey object
  * @return {Promise<Error|module:survey-model~SurveyObject>} Promise that resolves with {@link module:survey-model~SurveyObject|SurveyObject} (updated with hash array if such exist)
  */
-function getSurveyHashes(survey) {
+async function getSurveyHashes(survey) {
+    const { client } = await getStore('cache');
     return new Promise((resolve, reject) => {
         if (!survey || !survey.openRosaServer || !survey.openRosaId) {
             const error = new Error(
@@ -97,7 +99,8 @@ function getSurveyHashes(survey) {
  * @param {module:survey-model~SurveyObject} survey - survey object
  * @return {Promise<Error|null|boolean>} a Promise that resolves with a boolean
  */
-function isCacheUpToDate(survey) {
+async function isCacheUpToDate(survey) {
+    const { client } = await getStore('cache');
     return new Promise((resolve, reject) => {
         if (
             !survey ||
@@ -164,7 +167,8 @@ function isCacheUpToDate(survey) {
  * @param {module:survey-model~SurveyObject} survey - survey object
  * @return {Promise<Error|module:survey-model~SurveyObject>} a Promise that resolves with the survey object
  */
-function setSurvey(survey) {
+async function setSurvey(survey) {
+    const { client } = await getStore('cache');
     return new Promise((resolve, reject) => {
         if (
             !survey ||
@@ -217,7 +221,8 @@ function setSurvey(survey) {
  * @param {module:survey-model~SurveyObject} survey - survey object
  * @return {Promise<Error|module:survey-model~SurveyObject>} Flushed {@link module:survey-model~SurveyObject|SurveyObject}
  */
-function flushSurvey(survey) {
+async function flushSurvey(survey) {
+    const { client } = await getStore('cache');
     return new Promise((resolve, reject) => {
         if (!survey || !survey.openRosaServer || !survey.openRosaId) {
             const error = new Error(
@@ -262,7 +267,8 @@ function flushSurvey(survey) {
  * @static
  * @return {Promise<Error|boolean>} Promise that resolves `true` after all cache is flushed
  */
-function flushAll() {
+async function flushAll() {
+    const { client } = await getStore('cache');
     return new Promise((resolve, reject) => {
         // TODO: "Don't use KEYS in your regular application code"
         // (https://redis.io/commands/keys)

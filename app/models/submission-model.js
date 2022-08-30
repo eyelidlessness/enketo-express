@@ -3,7 +3,7 @@
  */
 
 const path = require('path');
-const { client } = require('../lib/redis-stores').getStore('main');
+const { getStore } = require('../lib/redis-stores');
 const config = require('./config-model').server;
 // var debug = require( 'debug' )( 'submission-model' );
 let logger;
@@ -50,7 +50,7 @@ if (config.log.submissions) {
  * @param { string } instanceId - instance ID of record
  * @return {Promise<Error|boolean>} a Promis that resolves with a boolean
  */
-function isNew(id, instanceId) {
+async function isNew(id, instanceId) {
     if (!id || !instanceId) {
         const error = new Error(
             'Cannot log instanceID: either enketo ID or instance ID not provided',
@@ -63,6 +63,8 @@ function isNew(id, instanceId) {
     }
 
     const key = `su:${id.trim()}`;
+
+    const { client } = await getStore('main');
 
     return _getLatestSubmissionIds(key)
         .then((latest) => _alreadyRecorded(instanceId, latest))
@@ -117,7 +119,8 @@ function _alreadyRecorded(instanceId, list = []) {
  * @param { string } key - database key
  * @return { Promise } a Promise that resolves with a redis list of submission IDs
  */
-function _getLatestSubmissionIds(key) {
+async function _getLatestSubmissionIds(key) {
+    const { client } = await getStore('main');
     return new Promise((resolve, reject) => {
         client.lrange(key, 0, -1, (error, res) => {
             if (error) {
