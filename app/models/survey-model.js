@@ -2,7 +2,7 @@
  * @module survey-model
  */
 
-const { client } = require('../lib/db');
+const { client } = require('../lib/redis-stores').getStore('main');
 const utils = require('../lib/utils');
 const TError = require('../lib/custom-error').TranslatedError;
 const config = require('./config-model').server;

@@ -3,7 +3,7 @@
  */
 
 const transformer = require('enketo-transformer');
-const { client } = require('../lib/db');
+const { client } = require('../lib/redis-stores').getStore('cache');
 const utils = require('../lib/utils');
 
 const prefix = 'ca:';

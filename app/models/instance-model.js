@@ -4,7 +4,7 @@
 
 const config = require('./config-model').server;
 const TError = require('../lib/custom-error').TranslatedError;
-const { client } = require('../lib/db');
+const { client } = require('../lib/redis-stores').getStore('main');
 const utils = require('../lib/utils');
 // var debug = require( 'debug' )( 'instance-model' );
 
