@@ -4,7 +4,7 @@
 
 const config = require('./config-model').server;
 const TError = require('../lib/custom-error').TranslatedError;
-const { client } = require('../lib/db');
+const { getStore } = require('../lib/db');
 const utils = require('../lib/utils');
 // var debug = require( 'debug' )( 'instance-model' );
 
@@ -18,7 +18,8 @@ const utils = require('../lib/utils');
  * @param {module:survey-model~SurveyObject} survey - survey object
  * @param { boolean } [protect] - whether to refuse if record is currently pending (to avoid editing conflicts)
  */
-function _cacheInstance(survey, protect = true) {
+async function _cacheInstance(survey, protect = true) {
+    const { client } = await getStore('main');
     return new Promise((resolve, reject) => {
         let error;
         if (
@@ -84,7 +85,8 @@ function _cacheInstance(survey, protect = true) {
  * @function
  * @param {module:survey-model~SurveyObject} survey - survey object \n
  */
-function _getInstance(survey) {
+async function _getInstance(survey) {
+    const { client } = await getStore('main');
     return new Promise((resolve, reject) => {
         let error;
         if (!survey || !survey.instanceId) {
@@ -122,7 +124,8 @@ function _getInstance(survey) {
  * @function
  * @param {module:survey-model~SurveyObject} survey - survey object \n
  */
-function _removeInstance(survey) {
+async function _removeInstance(survey) {
+    const { client } = await getStore('main');
     return new Promise((resolve, reject) => {
         if (!survey || !survey.instanceId) {
             const error = new Error(

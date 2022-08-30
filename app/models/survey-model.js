@@ -2,7 +2,7 @@
  * @module survey-model
  */
 
-const { client } = require('../lib/db');
+const { getStore } = require('../lib/db');
 const utils = require('../lib/utils');
 const TError = require('../lib/custom-error').TranslatedError;
 const config = require('./config-model').server;
@@ -94,7 +94,9 @@ const debug = require('debug')('survey-model');
  * @param { string } id - Survey ID
  * @return {Promise<SurveyObject>} Promise that resolves with a survey object
  */
-function getSurvey(id) {
+async function getSurvey(id) {
+    const { client } = await getStore('main');
+
     return new Promise((resolve, reject) => {
         if (!id) {
             const error = new Error(new Error('Bad request. Form ID required'));
@@ -229,7 +231,8 @@ function updateSurvey(survey) {
  * @param {module:survey-model~SurveyObject} survey - New survey
  * @return {Promise<Error|string>} Promise that resolves with survey ID
  */
-function _updateProperties(id, survey) {
+async function _updateProperties(id, survey) {
+    const { client } = await getStore('main');
     return new Promise((resolve, reject) => {
         const update = {};
         // create new object only including the updateable properties
@@ -258,7 +261,8 @@ function _updateProperties(id, survey) {
  * @param {module:survey-model~SurveyObject} survey - survey object
  * @return {Promise<Error|string>} Promise that eventually resolves with survey ID
  */
-function _addSurvey(openRosaKey, survey) {
+async function _addSurvey(openRosaKey, survey) {
+    const { client } = await getStore('main');
     // survey:counter no longer serves any purpose, after https://github.com/kobotoolbox/enketo-express/issues/481
     return _createNewEnketoId().then(
         (id) =>
@@ -296,7 +300,8 @@ function _addSurvey(openRosaKey, survey) {
  * @param { string } id - Survey ID
  * @return {Promise<Error|string>} Promise that eventually resolves with survey ID
  */
-function incrSubmissions(id) {
+async function incrSubmissions(id) {
+    const { client } = await getStore('main');
     return new Promise((resolve, reject) => {
         client
             .multi()
@@ -319,7 +324,8 @@ function incrSubmissions(id) {
  * @param { string } server - Server URL
  * @return {Promise<Error|string|number>} Promise that resolves with number of surveys
  */
-function getNumberOfSurveys(server) {
+async function getNumberOfSurveys(server) {
+    const { client } = await getStore('main');
     return new Promise((resolve, reject) => {
         let error;
         const cleanServerUrl = server === '' ? '' : utils.cleanUrl(server);
@@ -355,7 +361,8 @@ function getNumberOfSurveys(server) {
  * @param { string } server - Server URL
  * @return {Promise<Error|Array<SurveyObject>>} Promise that resolves with a list of SurveyObjects
  */
-function getListOfSurveys(server) {
+async function getListOfSurveys(server) {
+    const { client } = await getStore('cache');
     return new Promise((resolve, reject) => {
         let error;
         const cleanServerUrl = server === '' ? '' : utils.cleanUrl(server);
@@ -395,7 +402,8 @@ function getListOfSurveys(server) {
  * @param { string } openRosaKey - database key of survey
  * @return {Promise<Error|null|string>} Promise that resolves with survey ID
  */
-function _getEnketoId(openRosaKey) {
+async function _getEnketoId(openRosaKey) {
+    const { client } = await getStore('main');
     return new Promise((resolve, reject) => {
         if (!openRosaKey) {
             const error = new Error(
@@ -466,10 +474,11 @@ function _getActiveSurveys(openRosaIds) {
  * @param { number } [triesRemaining] - Avoid infinite loops when collissions become the norm.
  * @return {Promise<Error|string|Promise>} a Promise that resolves with a new unique Enketo ID
  */
-function _createNewEnketoId(
+async function _createNewEnketoId(
     id = utils.randomString(config['id length']),
     triesRemaining = 10
 ) {
+    const { client } = await getStore('main');
     return new Promise((resolve, reject) => {
         client.hgetall(`id:${id}`, (error, obj) => {
             if (error) {
