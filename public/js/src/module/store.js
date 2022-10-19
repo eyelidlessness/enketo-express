@@ -6,9 +6,6 @@ import db from 'db.js';
 import utils from './utils';
 import sniffer from './sniffer';
 import { t } from './translator';
-import encryptor from './encryptor';
-
-const parser = new DOMParser();
 
 /**
  * @typedef {import('db.js')}
@@ -31,7 +28,7 @@ let blobEncoding;
 let available = false;
 
 const databaseName = 'enketo';
-const version = 4;
+const version = 5;
 
 const REMOVE_RECORD_NAME_UNIQUENESS_VERSION = 4;
 
@@ -100,29 +97,6 @@ function init({ failSilently } = {}) {
                 server: databaseName,
                 version,
                 schema: {
-                    // the surveys
-                    surveys: {
-                        key: {
-                            keyPath: 'enketoId',
-                            autoIncrement: false,
-                        },
-                        indexes: {
-                            enketoId: {
-                                unique: true,
-                            },
-                        },
-                    },
-                    // the resources that belong to a survey
-                    resources: {
-                        key: {
-                            autoIncrement: false,
-                        },
-                        indexes: {
-                            key: {
-                                unique: true,
-                            },
-                        },
-                    },
                     // Records in separate table because it makes more sense for getting, updating and removing records
                     // if they are not stored in one (giant) array or object value.
                     // Need to watch out for bad iOS bug: http://www.raymondcamden.com/2014/9/25/IndexedDB-on-iOS-8--Broken-Bad
@@ -319,204 +293,6 @@ const propertyStore = {
 
             return propertyStore.update(stats);
         });
-    },
-};
-
-const surveyStore = {
-    /**
-     * Obtains a single survey's form HTML and XML model, theme, external instances from storage
-     *
-     * @param  { string } id - [description]
-     * @return { Promise<Survey> }    [description]
-     */
-    get(id) {
-        return server.surveys
-            .get(id)
-            .then(_firstItemOnly)
-            .then(_deserializeSurvey);
-    },
-    /**
-     * Stores a single survey's form HTML and XML model, theme, external instances
-     *
-     * @param { Survey } survey - [description]
-     * @return { Promise<Survey> }        [description]
-     */
-    set(survey) {
-        if (!survey.form || !survey.model || !survey.enketoId || !survey.hash) {
-            throw new Error('Survey not complete');
-        }
-
-        return server.surveys
-            .add(_serializeSurvey(survey))
-            .then(_firstItemOnly)
-            .then((storedSurvey) => {
-                const tasks = [];
-                if (survey.binaryDefaults) {
-                    survey.binaryDefaults.forEach((file) => {
-                        tasks.push(
-                            surveyStore.resource.update(survey.enketoId, file)
-                        );
-                    });
-                }
-
-                return (
-                    Promise.all(tasks)
-                        // return original survey with orginal survey.binaryDefaults
-                        .then(() => storedSurvey)
-                );
-            })
-            .then(_deserializeSurvey);
-    },
-    /**
-     * Updates a single survey's form HTML and XML model as well any external resources belonging to the form
-     *
-     * @param  { Survey } survey - [description]
-     * @return { Promise<Survey> }        [description]
-     */
-    update(survey) {
-        let obsoleteResources = [];
-        let obsoleteBinaryDefaults = [];
-
-        if (!survey.form || !survey.model || !survey.enketoId) {
-            throw new Error('Survey not complete');
-        }
-
-        const resourceKeys = []
-            .concat(survey.resources || [])
-            .map((resource) => resource.url);
-        const binaryDefaultKeys = []
-            .concat(survey.binaryDefaults || [])
-            .map((resource) => resource.url);
-
-        return server.surveys
-            .get(survey.enketoId)
-            .then((result) => {
-                // Determine obsolete resources to be removed
-                // But if undefined, do not determine this!
-                if (survey.resources) {
-                    obsoleteResources = (result.resources || []).filter(
-                        (existing) => resourceKeys.indexOf(existing) < 0
-                    );
-                }
-                if (survey.binaryDefaults) {
-                    obsoleteBinaryDefaults = (
-                        result.binaryDefaults || []
-                    ).filter(
-                        (existing) => binaryDefaultKeys.indexOf(existing) < 0
-                    );
-                }
-
-                const update = { ..._serializeSurvey(survey) };
-
-                // Note: if survey.resources = undefined/null, do not store empty array
-                // as it means there are no resources to store (and load) - they may be added later by form-cache.js
-                if (survey.resources) {
-                    update.resources = resourceKeys;
-                }
-
-                if (survey.binaryDefaults) {
-                    update.binaryDefaults = binaryDefaultKeys;
-                }
-
-                // Update the existing survey
-                return server.surveys.update(update);
-            })
-            .then(_firstItemOnly)
-            .then((result) => {
-                const tasks = [];
-                // Add new or update existing resources, combining binaryDefaults and form resources
-                (survey.resources || [])
-                    .concat(survey.binaryDefaults || [])
-                    .forEach((file) => {
-                        tasks.push(
-                            surveyStore.resource.update(survey.enketoId, file)
-                        );
-                    });
-                // Remove obsolete resources
-                obsoleteResources
-                    .concat(obsoleteBinaryDefaults)
-                    .forEach((key) => {
-                        tasks.push(
-                            surveyStore.resource
-                                .remove(survey.enketoId, key)
-                                .then(() => null)
-                        );
-                    });
-
-                // Execution
-                return Promise.all(tasks).then((resources) => {
-                    if (survey.resources) {
-                        result.resources = resources.filter(
-                            (resource) => resource != null
-                        );
-                    }
-
-                    return _deserializeSurvey(result);
-                });
-            });
-    },
-    /**
-     * Removes survey form and all its resources
-     *
-     * @param  { string } id - Enketo form ID
-     * @return { Promise<void> } [description]
-     */
-    remove(id) {
-        let resources;
-        const tasks = [];
-
-        return surveyStore
-            .get(id)
-            .then((survey) => {
-                resources = survey.resources || [];
-                resources.forEach((resource) => {
-                    tasks.push(surveyStore.resource.remove(id, resource));
-                });
-                tasks.push(server.surveys.remove(id));
-
-                return Promise.all(tasks);
-            })
-            .then(() => {});
-    },
-    /**
-     * removes all surveys and survey resources
-     *
-     * @return { Promise } [description]
-     */
-    removeAll() {
-        return _flushTable('surveys').then(() => _flushTable('resources'));
-    },
-    resource: {
-        /**
-         * Obtains a form resource
-         *
-         * @param  { string } id -  Enketo survey ID
-         * @param  { string } url - URL of resource
-         * @return { Promise<Blob> } A promise resolving with the file.
-         */
-        get(id, url) {
-            return _getFile('resources', id, url);
-        },
-        /**
-         * Updates a form resource in storage or creates it if it does not yet exist.
-         *
-         * @param { string } id - Enketo survey ID
-         * @param {{item:Blob, url:string}} resource - Form resource to update.
-         * @return {Promise<Blob>}         A promise resolving with the file that was updated.
-         */
-        update(id, resource) {
-            return _updateFile('resources', id, resource);
-        },
-        /**
-         * Removes form resource
-         *
-         * @param  { string } id -  Enketo survey ID
-         * @param  { string } url - URL of resource
-         * @return { Promise } [description]
-         */
-        remove(id, url) {
-            return server.resources.remove(`${id}:${url}`);
-        },
     },
 };
 
@@ -844,64 +620,6 @@ function _firstItemOnly(results) {
 }
 
 /**
- * Serializes a survey for storage in IndexedDB:
- *
- * - externalData XMLDocuments are serialized to strings
- * - surveys with encryption enabled are converted to a state which can be deserialized on retrieval
- *
- * @see {encryptor.serializeEncryptedSurvey}
- * @param {Survey} survey
- * @return {Promise<Survey>}
- */
-function _serializeSurvey(survey) {
-    if (survey) {
-        if (survey.externalData) {
-            survey.externalData = survey.externalData.map((instance) => {
-                if (instance.xml instanceof XMLDocument) {
-                    instance.xml = new XMLSerializer().serializeToString(
-                        instance.xml.documentElement,
-                        'text/xml'
-                    );
-                }
-
-                return instance;
-            });
-        }
-
-        return encryptor.serializeEncryptedSurvey(survey);
-    }
-}
-
-/**
- * Deserializes a survey retrieved from IndexedDB:
- *
- * - externalData strings are deserialized to XMLDocuments
- * - surveys which should have encryption enabled are restored to that state
- *
- * @see {encryptor.deserializeEncryptedSurvey}
- * @param {Survey} survey
- * @return {Promise<Survey>}
- */
-function _deserializeSurvey(survey) {
-    if (survey) {
-        if (survey.externalData) {
-            survey.externalData = survey.externalData.map((instance) => {
-                if (typeof instance.xml === 'string') {
-                    instance.xml = parser.parseFromString(
-                        instance.xml,
-                        'text/xml'
-                    );
-                }
-
-                return instance;
-            });
-        }
-
-        return encryptor.deserializeEncryptedSurvey(survey);
-    }
-}
-
-/**
  * Obtains a file from a specified table
  *
  * @param  { string } table - database table name
@@ -1066,18 +784,6 @@ const dump = {
                 });
             });
     },
-    surveys() {
-        server.surveys
-            .query()
-            .all()
-            .execute()
-            .done((results) => {
-                console.log(`${results.length} surveys found`);
-                results.forEach((item) => {
-                    console.log('survey', item);
-                });
-            });
-    },
     records() {
         server.records
             .query()
@@ -1122,7 +828,6 @@ export default {
         return available;
     },
     property: propertyStore,
-    survey: surveyStore,
     dynamicData: dataStore,
     record: recordStore,
     flush,

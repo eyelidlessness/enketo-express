@@ -1,3 +1,31 @@
+/**
+ * @template T
+ * @param {IDBRequest<T>} request
+ * @return {Promise<T>}
+ */
+const dbPromise = (request) =>
+    new Promise((resolve, reject) => {
+        const once = (type, handler) => () => {
+            handler(request.result);
+
+            request.removeEventListener('error', onError);
+            request.removeEventListener('success', onSuccess);
+        };
+        const onError = once('error', reject);
+        const onSuccess = once('success', resolve);
+
+        request.addEventListener('error', onError);
+        request.addEventListener('success', onSuccess);
+    });
+
+// TODO: this might be possible/trivial actually??
+// /**
+//  * @param {string} storeName
+//  */
+// const migrateCachedResources = async (storeName) => {
+//     const items =
+// };
+
 const STATIC_CACHE = 'enketo-common';
 const FORMS_CACHE = 'enketo-forms';
 
@@ -66,9 +94,65 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(onActivate());
 });
 
+/**
+ * @param {string} storeName
+ * @param {string} key
+ * @param {string[]} [path]
+ */
+const fetchIndexedDBResource = async (storeName, key, path = []) => {
+    const database = await dbPromise(indexedDB.open('enketo'));
+    const transaction = database.transaction(storeName, 'readonly');
+    const objectStore = transaction.objectStore(storeName);
+    const value = await dbPromise(objectStore.get(key));
+    const resource = path.reduce((acc, key) => acc[key], value);
+
+    if (resource == null) {
+        return;
+    }
+
+    const body = resource instanceof Blob ? resource : JSON.stringify(resource);
+    const headers =
+        resource === body ? {} : { 'content-type': 'application/json' };
+
+    return new Response(body, { headers });
+};
+
 const FETCH_OPTIONS = {
     cache: 'reload',
     credentials: 'same-origin',
+};
+
+const isCachedFormPageStale = async (url) => {
+    const hashURL = url.replace('/x/', '/transform/xform/hash/');
+    const [{ value: hashResponse }, { value: cachedHashResponse }] =
+        await Promise.allSettled([
+            fetch(hashURL, FETCH_OPTIONS),
+            caches.match(hashURL),
+        ]);
+
+    if (hashResponse == null) {
+        return false;
+    }
+
+    await cacheResponse(hashURL, hashResponse.clone());
+
+    if (cachedHashResponse == null) {
+        return true;
+    }
+
+    const [
+        {
+            value: { hash },
+        },
+        {
+            value: { hash: cachedHash },
+        },
+    ] = await Promise.allSettled([
+        hashResponse.json(),
+        cachedHashResponse.json(),
+    ]);
+
+    return hash == null || hash !== cachedHash;
 };
 
 /**
@@ -87,6 +171,39 @@ const onFetch = async (request) => {
     const cached = await caches.match(cacheKey);
 
     let response = cached;
+
+    if (isFormPageRequest) {
+        try {
+            const isStale = await isCachedFormPageStale(url);
+
+            if (isStale) {
+                response = await fetch(url, FETCH_OPTIONS);
+            }
+        } catch (error) {
+            response = cached;
+        }
+    }
+
+    if (response == null) {
+        const indexedDBURLMatches = url.match(
+            /https?:\/\/.*?\/idb\/(.*?)\/([^/?]+)(\?(\w+)(,\w+)*)?/
+        );
+        const mediaURLMatches = url.match(
+            /\/media\/get\/0\/(.*)\/.*?\/([^/]*$)/
+        );
+
+        if (indexedDBURLMatches != null) {
+            const [, storeName, key, pathStr] = indexedDBURLMatches;
+            const path = pathStr == null ? [] : pathStr.split(',');
+
+            response = await fetchIndexedDBResource(storeName, key, path);
+        } else if (mediaURLMatches != null) {
+            const [, enketoId, fileName] = mediaURLMatches;
+            const key = `${enketoId}:${fileName}`;
+
+            response = await fetchIndexedDBResource('resources', key);
+        }
+    }
 
     if (response == null || ENV === 'development') {
         try {

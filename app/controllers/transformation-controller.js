@@ -28,16 +28,16 @@ router.param('encrypted_enketo_id_single', routerUtils.encryptedEnketoIdSingle);
 router.param('encrypted_enketo_id_view', routerUtils.encryptedEnketoIdView);
 
 router
-    .post('*', (req, res, next) => {
+    .get('*', (req, res, next) => {
         // set content-type to json to provide appropriate json Error responses
         res.set('Content-Type', 'application/json');
         next();
     })
-    .post('/xform/:encrypted_enketo_id_single', getSurveyParts)
-    .post('/xform/:encrypted_enketo_id_view', getSurveyParts)
-    .post('/xform/:enketo_id', getSurveyParts)
-    .post('/xform', getSurveyParts)
-    .post('/xform/hash/:enketo_id', getSurveyHash);
+    .get('/xform/:encrypted_enketo_id_single', getSurveyParts)
+    .get('/xform/:encrypted_enketo_id_view', getSurveyParts)
+    .get('/xform/:enketo_id', getSurveyParts)
+    .get('/xform', getSurveyParts)
+    .get('/xform/hash/:enketo_id', getSurveyHash);
 
 /**
  * Obtains HTML Form, XML model, and existing XML instance
@@ -48,9 +48,9 @@ router
  */
 async function getSurveyParts(req, res, next) {
     try {
-        let survey = await _getSurveyParams(req);
+        let survey = await getSurveyParams(req);
 
-        // A request with "xformUrl" body parameter was used (unlaunched form)
+        // A request with "xformUrl" query parameter was used (unlaunched form)
         if (survey.info != null) {
             survey = await _getFormDirectly(survey);
 
@@ -90,7 +90,7 @@ async function getSurveyParts(req, res, next) {
  * @param {Function} next - Express callback
  */
 function getSurveyHash(req, res, next) {
-    _getSurveyParams(req)
+    getSurveyParams(req)
         .then((survey) => cacheModel.getHashes(survey))
         .then(_updateCache)
         .then((survey) => {
@@ -226,6 +226,7 @@ function _respond(res, survey) {
     res.send({
         form: survey.form,
         media: survey.media,
+        mediaHash: survey.mediaHash,
         // previously this was JSON.stringified, not sure why
         model: survey.model,
         theme: survey.theme,
@@ -244,7 +245,7 @@ function _respond(res, survey) {
  * @return { string } - a hash
  */
 function _getCombinedHash(survey) {
-    const FORCE_UPDATE = 1;
+    const FORCE_UPDATE = 2;
     const brandingHash =
         survey.account.branding && survey.account.branding.source
             ? utils.md5(survey.account.branding.source)
@@ -279,8 +280,8 @@ function _setCookieAndCredentials(survey, req) {
  * @param {module:api-controller~ExpressRequest} req - HTTP request
  * @return { Promise<module:survey-model~SurveyObject> } a Promise resolving with survey object
  */
-function _getSurveyParams(req) {
-    const params = req.body;
+function getSurveyParams(req) {
+    const { xformUrl } = req.query;
     const customParamName = req.app.get(
         'query parameter to pass to submission'
     );
@@ -297,8 +298,8 @@ function _getSurveyParams(req) {
                 return _setCookieAndCredentials(survey, req);
             });
     }
-    if (params.xformUrl) {
-        const urlObj = url.parse(params.xformUrl);
+    if (xformUrl) {
+        const urlObj = url.parse(xformUrl);
         if (!urlObj || !urlObj.protocol || !urlObj.host) {
             const error = new Error('Bad Request. Form URL is invalid.');
             error.status = 400;
@@ -316,7 +317,7 @@ function _getSurveyParams(req) {
                 ) =>
                     Promise.resolve({
                         info: {
-                            downloadUrl: params.xformUrl,
+                            downloadUrl: xformUrl,
                         },
                         account: survey.account,
                     })

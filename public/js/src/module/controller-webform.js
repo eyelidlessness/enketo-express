@@ -19,7 +19,7 @@ import {
 import records from './records-queue';
 import encryptor from './encryptor';
 import { getLastSavedRecord, populateLastSavedInstances } from './last-saved';
-import { replaceMediaSources, replaceModelMediaSources } from './media';
+import { replaceMediaSources } from './media';
 
 /**
  * @typedef {import('../../../../app/models/survey-model').SurveyObject} Survey
@@ -50,20 +50,13 @@ const formOptions = {
  */
 
 /**
- * @param {Element} formEl
+ * @param {HTMLFormElement} formEl
  * @param {ControllerWebformInitData} data
  * @param {string[]} [loadErrors]
  * @return {Promise<Form>}
  */
 function init(formEl, data, loadErrors = []) {
-    const media = {
-        ...data.survey.media,
-        ...data.instanceAttachments,
-    };
-
-    replaceMediaSources(formEl, media, {
-        isOffline: settings.offline,
-    });
+    replaceMediaSources(data.survey, formEl, data.instanceAttachments);
 
     formData = data;
 
@@ -76,10 +69,6 @@ function init(formEl, data, loadErrors = []) {
             }
 
             data.submitted = Boolean(data.isEditing);
-
-            if (data.instanceAttachments) {
-                fileManager.setInstanceAttachments(data.instanceAttachments);
-            }
 
             const langSelector = formEl.querySelector('#form-languages');
             const formDefaultLanguage = langSelector
@@ -99,7 +88,6 @@ function init(formEl, data, loadErrors = []) {
             }
 
             form = new Form(formEl, data, formOptions);
-            replaceModelMediaSources(form, media);
 
             loadErrors = loadErrors.concat(form.init());
 
@@ -220,8 +208,6 @@ function _resetForm(survey) {
                 },
                 formOptions
             );
-
-            replaceModelMediaSources(form, survey.media);
 
             const loadErrors = form.init();
 
@@ -497,7 +483,7 @@ function _confirmRecordName(recordName, draft, errorMsg) {
  * @param {string} [recordName] - proposed name of the record
  * @param {boolean} [confirmed] - whether the name of the record has been confirmed by the user
  */
-function _saveRecord(survey, draft, recordName, confirmed) {
+function saveRecord(survey, draft, recordName, confirmed) {
     const include = { irrelevant: draft };
 
     // triggering "before-save" event to update possible "timeEnd" meta data in form
@@ -506,14 +492,14 @@ function _saveRecord(survey, draft, recordName, confirmed) {
     // check recordName
     if (!recordName) {
         return _getRecordName().then((name) =>
-            _saveRecord(survey, draft, name, false)
+            saveRecord(survey, draft, name, false)
         );
     }
 
     // check whether record name is confirmed if necessary
     if (draft && !confirmed) {
         return _confirmRecordName(recordName, draft)
-            .then((name) => _saveRecord(survey, draft, name, true))
+            .then((name) => saveRecord(survey, draft, name, true))
             .catch(() => {});
     }
 
@@ -559,7 +545,7 @@ function _saveRecord(survey, draft, recordName, confirmed) {
             // Save the record, determine the save method
             const saveMethod = form.recordName ? 'update' : 'set';
 
-            return records.save(saveMethod, record);
+            return records.save(survey, saveMethod, record);
         })
         .then(() => {
             records.removeAutoSavedRecord();
@@ -599,7 +585,7 @@ function _saveRecord(survey, draft, recordName, confirmed) {
                     recordName,
                     draft,
                     t('confirm.save.existingerror')
-                ).then((name) => _saveRecord(survey, draft, name, true));
+                ).then((name) => saveRecord(survey, draft, name, true));
             }
             if (!errorMsg) {
                 errorMsg = t('confirm.save.unkownerror');
@@ -664,7 +650,7 @@ function _setEventHandlers(survey) {
                 .then((valid) => {
                     if (valid) {
                         if (settings.offline) {
-                            return _saveRecord(survey, false);
+                            return saveRecord(survey, false);
                         }
                         return _submitRecord(survey);
                     }
@@ -688,7 +674,7 @@ function _setEventHandlers(survey) {
                 const $button = $(draftButton);
                 $button.btnBusyState(true);
                 setTimeout(() => {
-                    _saveRecord(survey, true)
+                    saveRecord(survey, true)
                         .then(() => {
                             $button.btnBusyState(false);
                         })

@@ -1,7 +1,4 @@
-import {
-    replaceMediaSources,
-    replaceModelMediaSources,
-} from '../../public/js/src/module/media';
+import { replaceMediaSources } from '../../public/js/src/module/media';
 
 describe('Media replacement', () => {
     const parser = new DOMParser();
@@ -21,9 +18,6 @@ describe('Media replacement', () => {
 
     /** @type {HTMLFormElement} */
     let formRoot;
-
-    /** @type {Element} */
-    let modelRoot;
 
     beforeEach(() => {
         sandbox = sinon.createSandbox();
@@ -54,29 +48,6 @@ describe('Media replacement', () => {
         );
 
         formRoot = formDocument.querySelector('form');
-
-        const modelDocument = parser.parseFromString(
-            /* xml */ `
-                <model>
-                    <instance>
-                        <data xmlns:jr="http://openrosa.org/javarosa"
-                            xmlns:odk="http://www.opendatakit.org/xforms"
-                            xmlns:orx="http://openrosa.org/xforms" id="a-form">
-                            <an-image src="jr://images/an%20image.jpg">jr://images/an%20image.jpg</an-image>
-                            <a-song src="jr://audio/a%20song.mp3">jr://audio/a%20song.mp3</a-song>
-                            <meta>
-                                <instanceID/>
-                            </meta>
-                        </data>
-                    </instance>
-                    <instance id="a-spreadsheet" src="jr://files-csv/a%20spreadsheet.csv"/>
-                    <instance id="last-saved" src="jr://instance/last-saved"/>
-                </model>
-            `,
-            'text/xml'
-        );
-
-        modelRoot = modelDocument.documentElement;
     });
 
     afterEach(() => {
@@ -124,30 +95,6 @@ describe('Media replacement', () => {
 
         expect(formLogo.src).to.equal(
             'https://example.com/-/media/get/0/WXMDbc0H/c0f15ee04dacb1db7cc60797285ff1c8/form_logo.png'
-        );
-    });
-
-    it('replaces jr: URLs in `src` attributes in a model when the `modelRoot` property is set', () => {
-        const enketoForm = {
-            model: {},
-        };
-
-        replaceModelMediaSources(enketoForm, media);
-
-        enketoForm.model.rootElement = modelRoot;
-
-        const img = modelRoot.querySelector('an-image');
-        const audio = modelRoot.querySelector('a-song');
-        const instance = modelRoot.querySelector('instance#a-spreadsheet');
-
-        expect(img.getAttribute('src')).to.equal(
-            'https://example.com/-/media/get/0/WXMDbc0H/c0f15ee04dacb1db7cc60797285ff1c8/an%20image.jpg'
-        );
-        expect(audio.getAttribute('src')).to.equal(
-            'https://example.com/-/media/get/0/WXMDbc0H/c0f15ee04dacb1db7cc60797285ff1c8/a%20song.mp3'
-        );
-        expect(instance.getAttribute('src')).to.equal(
-            'https://example.com/-/media/get/0/WXMDbc0H/c0f15ee04dacb1db7cc60797285ff1c8/a%20spreadsheet.csv'
         );
     });
 });

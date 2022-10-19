@@ -13,7 +13,6 @@ import {
     setLastSavedRecord,
 } from './last-saved';
 import { geoJSONExternalInstance } from './geojson';
-import { replaceMediaSources } from './media';
 
 /**
  * @typedef {import('../../../../app/models/record-model').EnketoRecord} EnketoRecord
@@ -411,8 +410,6 @@ const getTransformURL = (basePath, enketoId) => {
  * @return {Promise<SurveyExternalData[]>}
  */
 const getExternalData = async (survey, model, options = {}) => {
-    replaceMediaSources(model, survey.media);
-
     /** @type {Array<Promise<SurveyExternalData>>} */
     const tasks = [];
     const externalInstances = [
@@ -477,7 +474,7 @@ function getFormParts(props) {
 
     const transformURL = getTransformURL(settings.basePath, props.enketoId);
 
-    return _postData(transformURL, {
+    return request(transformURL, {
         xformUrl: props.xformUrl,
     })
         .catch((error) => {
@@ -519,37 +516,20 @@ function getFormParts(props) {
         );
 }
 
-function _postData(url, data = {}) {
-    return _request(url, 'POST', data);
-}
+/**
+ * @param {string} requestURL
+ * @param {Record<string, string>} [data]
+ */
+function request(requestURL, data = {}) {
+    const url = new URL(requestURL, window.location.href);
 
-function _getData(url, data = {}) {
-    return _request(url, 'GET', data);
-}
-
-function _request(url, method = 'POST', data = {}) {
-    const options = {
-        method,
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Accept: 'application/json',
-        },
-    };
-    // add data
-    if (method === 'GET' || method === 'HEAD') {
-        if (Object.keys(data).length) {
-            const urlObj = new URL(url, location.href);
-            const search = urlObj.search.slice(1);
-            urlObj.search = `?${search}${search ? '&' : ''}${_encodeFormData(
-                data
-            )}`;
-            url = urlObj.href;
+    Object.entries(data).forEach(([key, value]) => {
+        if (value != null) {
+            url.searchParams.set(key, value);
         }
-    } else {
-        options.body = _encodeFormData(data);
-    }
+    });
 
-    return fetch(url, options)
+    return fetch(url, { headers: { Accept: 'application/json' } })
         .then(_throwResponseError)
         .then((response) => response.json());
 }
@@ -571,16 +551,6 @@ function _throwResponseError(response) {
         });
     }
     return response;
-}
-
-function _encodeFormData(data) {
-    return Object.keys(data)
-        .filter((key) => data[key])
-        .map(
-            (key) =>
-                `${encodeURIComponent(key)}=${encodeURIComponent(data[key])}`
-        )
-        .join('&');
 }
 
 /**
@@ -685,6 +655,7 @@ function getDataFile(url, languageMap) {
         });
 }
 
+// TODO can we remove this?
 /**
  * Extracts version from service worker script
  *
@@ -702,9 +673,7 @@ function getServiceWorkerVersion(serviceWorkerUrl) {
 }
 
 function getFormPartsHash() {
-    return _postData(TRANSFORM_HASH_URL + _getQuery()).then(
-        (data) => data.hash
-    );
+    return request(TRANSFORM_HASH_URL + _getQuery()).then((data) => data.hash);
 }
 
 /**
@@ -714,7 +683,8 @@ function getFormPartsHash() {
  * @return { Promise<string> } a Promise that resolves with an XML instance as text
  */
 function getExistingInstance(props) {
-    return _getData(INSTANCE_URL, props);
+    console.log('props', props);
+    return request(INSTANCE_URL, props);
 }
 
 // Note: settings.submissionParameter is only populated after loading form from cache in offline mode.

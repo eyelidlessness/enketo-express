@@ -12,7 +12,6 @@ import {
 import store from './module/store';
 import utils from './module/utils';
 import events from './module/event';
-import formCache from './module/form-cache';
 import applicationCache from './module/application-cache';
 
 const loader = document.querySelector('.main-loader');
@@ -30,13 +29,19 @@ if (settings.offline) {
     console.log('App in offline-capable mode.');
     delete survey.xformUrl;
     _setAppCacheEventHandlers();
-    applicationCache
-        .init(survey)
+    store
+        .init()
+        .then(() => applicationCache.init(survey))
         .then(initTranslator)
-        .then(formCache.init)
+        .then((props) =>
+            connection.getFormParts({
+                ...props,
+                isPreview: settings.type === 'preview',
+            })
+        )
         .then(_addBranding)
         .then(_swapTheme)
-        .then(formCache.updateMaxSubmissionSize)
+        .then(connection.getMaximumSubmissionSize)
         .then(_updateMaxSizeSetting)
         .then(_init)
         .then((formParts) => {

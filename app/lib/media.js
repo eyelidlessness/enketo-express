@@ -7,6 +7,7 @@ const instanceModel = require('../models/instance-model');
 const surveyModel = require('../models/survey-model');
 const userModel = require('../models/user-model');
 const communicator = require('./communicator');
+const utils = require('./utils');
 
 /** @enum {'0' | '1'} */
 const ResourceType = /** @type {const} */ ({
@@ -135,7 +136,7 @@ const getMediaMap = async (resourceId, media, options) => {
             const mediaURL = createMediaURL({
                 basePath,
                 fileName: filename,
-                hash,
+                hash: options.mediaHash,
                 resourceType,
                 resourceId,
             });

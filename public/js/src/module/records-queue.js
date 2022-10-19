@@ -11,7 +11,6 @@ import events from './event';
 import settings from './settings';
 import exporter from './exporter';
 import { t } from './translator';
-import formCache from './form-cache';
 import { setLastSavedRecord } from './last-saved';
 
 let $exportButton;
@@ -75,7 +74,7 @@ function set(record) {
  *
  * @return { Promise<EnketoRecord> }
  */
-function save(action, record) {
+function save(survey, action, record) {
     /** @type { Promise<EnketoRecord> } */
     let promise;
 
@@ -94,8 +93,7 @@ function save(action, record) {
 
             return result;
         })
-        .then(({ enketoId }) => formCache.get({ enketoId }))
-        .then((survey) => setLastSavedRecord(survey, record))
+        .then(() => setLastSavedRecord(survey, record))
         .then(_updateRecordList)
         .then(() => result);
 }
