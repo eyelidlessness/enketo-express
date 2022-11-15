@@ -6,6 +6,7 @@ const cwd = process.cwd();
 
 const entryPoints = pkg.entries.map((entry) => path.resolve(cwd, entry));
 const { NODE_ENV } = process.env;
+const isProduction = NODE_ENV === 'production';
 
 module.exports = {
     bundle: true,
@@ -14,7 +15,7 @@ module.exports = {
     },
     entryPoints,
     format: 'iife',
-    minify: true,
+    minify: isProduction,
     outdir: path.resolve(cwd, './public/js/build'),
     plugins: [
         alias(
@@ -26,6 +27,6 @@ module.exports = {
             )
         ),
     ],
-    sourcemap: NODE_ENV === 'production' ? false : 'inline',
+    sourcemap: isProduction ? false : 'inline',
     target: ['chrome89', 'edge89', 'firefox90', 'safari13'],
 };
