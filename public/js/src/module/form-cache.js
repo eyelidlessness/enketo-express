@@ -13,7 +13,6 @@ import {
     populateLastSavedInstances,
     removeLastSavedRecord,
 } from './last-saved';
-import { replaceMediaSources } from './media';
 
 /**
  * @typedef {import('../../../../app/models/record-model').EnketoRecord} EnketoRecord
@@ -81,10 +80,7 @@ const updateSurveyCache = (survey) =>
  * @return {Promise<Survey>}
  */
 function set(survey) {
-    return connection
-        .getFormParts(survey)
-        .then(addBinaryDefaultsAndUpdateModel)
-        .then(store.survey.set);
+    return connection.getFormParts(survey).then(store.survey.set);
 }
 
 /**
@@ -168,8 +164,13 @@ function _processDynamicData(survey) {
 const setUpdateIntervals = async (survey) => {
     hash = survey.hash;
 
-    // Check for form update upon loading.
-    updateCache(survey);
+    /*
+     * Check for form immediately after the form is loaded. Wrapped in
+     * `queueMicrotask` to prevent unexpected updates in tests.
+     */
+    queueMicrotask(() => {
+        updateCache(survey);
+    });
 
     // Note that for large Xforms where the XSL transformation takes more than 30 seconds,
     // the first update make take 20 minutes to propagate to the browser of the very first user(s)
@@ -188,55 +189,6 @@ const setUpdateIntervals = async (survey) => {
 };
 
 /**
- * Loads all default binary files and adds them to the survey object. It removes the src
- * attributes from model nodes with default binary files.
- *
- * @param { Survey } survey - survey object
- * @return { Promise<Survey> }
- */
-function addBinaryDefaultsAndUpdateModel(survey) {
-    // The mechanism for default binary files is as follows:
-    // 1. They are stored as binaryDefaults in the resources table with the key being comprised of the VALUE (i.e. jr:// url)
-    // 2. Filemanager.getFileUrl will determine whether to load from (survey) resources of (record) files
-
-    const model = new DOMParser().parseFromString(survey.model, 'text/xml');
-
-    replaceMediaSources(model, survey.media);
-
-    const binaryDefaultElements = [
-        ...model.querySelectorAll('instance:first-child > * *[src]'),
-    ];
-    const tasks = [];
-    survey.binaryDefaults = [];
-
-    binaryDefaultElements.forEach((el) => {
-        tasks.push(
-            connection
-                .getMediaFile(el.getAttribute('src'))
-                .then((result) => {
-                    // Overwrite the url to use the jr://images/img.png value. This makes the magic happen.
-                    // It causes a jr:// value to be treated the same as a filename.ext value.
-                    result.url = el.textContent;
-                    survey.binaryDefaults.push(result);
-                    // Now the src attribute should be removed because the filemanager.js can return the blob for
-                    // the jr://images/... key (as if it is a file).
-                    el.removeAttribute('src');
-                })
-                .catch((e) => {
-                    // let files fail quietly. Rely on Enketo Core to show error.
-                    console.error(e);
-                })
-        );
-    });
-
-    return Promise.all(tasks).then(() => {
-        survey.model = new XMLSerializer().serializeToString(model);
-
-        return survey;
-    });
-}
-
-/**
  * Updates maximum submission size if this hasn't been defined yet.
  * The first time this function is called is when the user is online.
  * If the form/data server updates their max size setting, this value
@@ -249,9 +201,6 @@ function updateMaxSubmissionSize(survey) {
     if (!survey.maxSize) {
         return connection.getMaximumSubmissionSize(survey).then((survey) => {
             if (survey.maxSize) {
-                // Ignore resources. These should not be updated.
-                delete survey.binaryDefaults;
-
                 return updateSurveyCache(survey);
             }
 
@@ -283,13 +232,6 @@ function updateCache(survey) {
 
                 return connection
                     .getFormParts(survey)
-                    .then((formParts) => {
-                        // media will be updated next time the form is loaded if resources is undefined
-                        formParts.resources = undefined;
-
-                        return formParts;
-                    })
-                    .then(addBinaryDefaultsAndUpdateModel)
                     .then(updateSurveyCache)
                     .then((result) => {
                         // set the hash so that subsequent update checks won't redownload the form

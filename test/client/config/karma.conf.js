@@ -33,7 +33,6 @@ module.exports = (config) => {
 
         // list of files to exclude
         exclude: [
-            'public/js/src/module/offline-app-worker-partial.js',
             'public/js/src/enketo-offline-fallback.js',
             'public/js/src/enketo-webform-edit.js',
             'public/js/src/enketo-webform-view.js',

@@ -1,10 +1,13 @@
-const STATIC_CACHE = 'enketo-common';
-const FORMS_CACHE = 'enketo-forms';
+/** @private - exported for testing */
+export const FORMS_CACHE = 'enketo-forms';
+
+/** @private - exported for testing */
+export const STATIC_CACHE = 'enketo-common';
 
 /**
  * @param {string} url
  */
-const cacheName = (url) => {
+const cacheStorageKey = (url) => {
     if (
         url === '/favicon.ico' ||
         url.endsWith('/x/') ||
@@ -22,7 +25,7 @@ const cacheName = (url) => {
  */
 const cacheResponse = async (key, response) => {
     const clone = response.clone();
-    const cache = await caches.open(cacheName(key.url ?? key));
+    const cache = await caches.open(cacheStorageKey(key.url ?? key));
 
     await cache.put(key, clone);
 
@@ -37,14 +40,19 @@ const cachePrefetchURLs = async (response) => {
     const prefetchURLs = [
         ...linkHeader.matchAll(/<([^>]+)>;\s*rel="prefetch"/g),
     ].map(([, url]) => url);
-
     const cache = await caches.open(STATIC_CACHE);
 
     await Promise.allSettled(prefetchURLs.map((url) => cache.add(url)));
 };
 
-self.addEventListener('install', () => {
-    self.skipWaiting();
+const onInstall = async () => {
+    await self.skipWaiting();
+
+    console.log('Service worker installed');
+};
+
+self.addEventListener('install', (event) => {
+    event.waitUntil(onInstall());
 });
 
 const removeStaleCaches = async () => {
@@ -58,8 +66,9 @@ const removeStaleCaches = async () => {
 };
 
 const onActivate = async () => {
-    await self.clients.claim();
     await removeStaleCaches();
+
+    console.log('Service worker activated');
 };
 
 self.addEventListener('activate', (event) => {
@@ -75,11 +84,7 @@ const FETCH_OPTIONS = {
  * @param {Request} request
  */
 const onFetch = async (request) => {
-    const { method, referrer, url } = request;
-
-    if (method !== 'GET') {
-        return fetch(request, FETCH_OPTIONS);
-    }
+    const { referrer, url } = request;
 
     const { pathname } = new URL(url);
     const isFormPageRequest =
@@ -94,7 +99,9 @@ const onFetch = async (request) => {
      *
      * @see {@link https://github.com/enketo/enketo-express/issues/470}
      */
-    const cacheKey = isFormPageRequest ? url.replace(/\/x\/.*/, '/x/') : url;
+    const cacheKey = isFormPageRequest
+        ? url.replace(/\/x\/.*/, '/x/')
+        : request;
 
     const cached = await caches.match(cacheKey);
 
@@ -108,10 +115,12 @@ const onFetch = async (request) => {
         }
     }
 
+    const { type: responseType } = response ?? {};
+
     if (
         response == null ||
-        response.status !== 200 ||
-        response.type !== 'basic'
+        response?.status !== 200 ||
+        (responseType !== 'basic' && responseType !== 'default')
     ) {
         return response;
     }
@@ -138,7 +147,7 @@ const onFetch = async (request) => {
         );
     }
 
-    const isServiceWorkerScript = url === self.location.href;
+    const isServiceWorkerScript = url === self.serviceWorker.scriptURL;
 
     if (isServiceWorkerScript) {
         cachePrefetchURLs(response);
@@ -153,9 +162,10 @@ const { origin } = self.location;
 
 self.addEventListener('fetch', (event) => {
     const { request } = event;
-    const requestURL = new URL(request.url);
+    const { method } = request;
+    const { origin: requestOrigin } = new URL(request.url);
 
-    if (requestURL.origin === origin) {
+    if (method === 'GET' && requestOrigin === origin) {
         event.respondWith(onFetch(request));
     }
 });

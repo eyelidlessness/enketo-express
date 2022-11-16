@@ -42,16 +42,16 @@ const UPDATE_REGISTRATION_INTERVAL = 60 * 60 * 1000;
  * @param {Survey} survey
  */
 const init = async (survey) => {
+    const { serviceWorker } = navigator;
+
     try {
-        if (navigator.serviceWorker != null) {
+        if (serviceWorker != null) {
             const workerPath = `${settings.basePath}/x/offline-app-worker.js`;
             const workerURL = new URL(workerPath, window.location.href);
 
             workerURL.searchParams.set('version', settings.version);
 
-            const registration = await navigator.serviceWorker.register(
-                workerURL
-            );
+            const registration = await serviceWorker.register(workerURL);
 
             let reloadOnUpdate = true;
 
@@ -74,20 +74,18 @@ const init = async (survey) => {
             const currentActive = registration.active;
 
             if (currentActive != null) {
-                registration.addEventListener('updatefound', () => {
-                    _reportOfflineLaunchCapable(false);
-                });
+                serviceWorker.addEventListener('controllerchange', () => {
+                    if (reloadOnUpdate) {
+                        console.log('Service worker updated, reloading...');
+                        location.reload();
+                    } else {
+                        console.log(
+                            'Service worker updated, notifying user...'
+                        );
 
-                navigator.serviceWorker.addEventListener(
-                    'controllerchange',
-                    () => {
-                        if (reloadOnUpdate) {
-                            location.reload();
-                        } else {
-                            document.dispatchEvent(events.ApplicationUpdated());
-                        }
+                        document.dispatchEvent(events.ApplicationUpdated());
                     }
-                );
+                });
             }
 
             registration.update();
@@ -136,11 +134,10 @@ export default {
     RELOAD_ON_UPDATE_TIMEOUT,
     UPDATE_REGISTRATION_INTERVAL,
     get serviceWorkerScriptUrl() {
-        if (
-            'serviceWorker' in navigator &&
-            navigator.serviceWorker.controller
-        ) {
-            return navigator.serviceWorker.controller.scriptURL;
+        const { serviceWorker } = navigator;
+
+        if (serviceWorker?.controller != null) {
+            return serviceWorker.controller.scriptURL;
         }
 
         return null;

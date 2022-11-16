@@ -31,7 +31,7 @@ let blobEncoding;
 let available = false;
 
 const databaseName = 'enketo';
-const version = 4;
+const version = 5;
 
 const REMOVE_RECORD_NAME_UNIQUENESS_VERSION = 4;
 
@@ -112,17 +112,6 @@ function init({ failSilently } = {}) {
                             },
                         },
                     },
-                    // the resources that belong to a survey
-                    resources: {
-                        key: {
-                            autoIncrement: false,
-                        },
-                        indexes: {
-                            key: {
-                                unique: true,
-                            },
-                        },
-                    },
                     // Records in separate table because it makes more sense for getting, updating and removing records
                     // if they are not stored in one (giant) array or object value.
                     // Need to watch out for bad iOS bug: http://www.raymondcamden.com/2014/9/25/IndexedDB-on-iOS-8--Broken-Bad
@@ -181,8 +170,8 @@ function init({ failSilently } = {}) {
                         },
                     },
                     // Dynamic data, passed by via querystring is stored in a separate table,
-                    // because its update mechanism is separate from the survey + resources.
-                    // Otherwise the all-or-nothing form+resources update would remove this data.
+                    // because its update mechanism is separate from the survey.
+                    // Otherwise the all-or-nothing form update would remove this data.
                     data: {
                         key: {
                             keyPath: 'enketoId',
@@ -349,174 +338,40 @@ const surveyStore = {
         return server.surveys
             .add(_serializeSurvey(survey))
             .then(_firstItemOnly)
-            .then((storedSurvey) => {
-                const tasks = [];
-                if (survey.binaryDefaults) {
-                    survey.binaryDefaults.forEach((file) => {
-                        tasks.push(
-                            surveyStore.resource.update(survey.enketoId, file)
-                        );
-                    });
-                }
-
-                return (
-                    Promise.all(tasks)
-                        // return original survey with orginal survey.binaryDefaults
-                        .then(() => storedSurvey)
-                );
-            })
             .then(_deserializeSurvey);
     },
     /**
-     * Updates a single survey's form HTML and XML model as well any external resources belonging to the form
+     * Updates a single survey's form HTML and XML model belonging to the form
      *
      * @param  { Survey } survey - [description]
      * @return { Promise<Survey> }        [description]
      */
     update(survey) {
-        let obsoleteResources = [];
-        let obsoleteBinaryDefaults = [];
-
         if (!survey.form || !survey.model || !survey.enketoId) {
             throw new Error('Survey not complete');
         }
 
-        const resourceKeys = []
-            .concat(survey.resources || [])
-            .map((resource) => resource.url);
-        const binaryDefaultKeys = []
-            .concat(survey.binaryDefaults || [])
-            .map((resource) => resource.url);
-
         return server.surveys
-            .get(survey.enketoId)
-            .then((result) => {
-                // Determine obsolete resources to be removed
-                // But if undefined, do not determine this!
-                if (survey.resources) {
-                    obsoleteResources = (result.resources || []).filter(
-                        (existing) => resourceKeys.indexOf(existing) < 0
-                    );
-                }
-                if (survey.binaryDefaults) {
-                    obsoleteBinaryDefaults = (
-                        result.binaryDefaults || []
-                    ).filter(
-                        (existing) => binaryDefaultKeys.indexOf(existing) < 0
-                    );
-                }
-
-                const update = { ..._serializeSurvey(survey) };
-
-                // Note: if survey.resources = undefined/null, do not store empty array
-                // as it means there are no resources to store (and load) - they may be added later by form-cache.js
-                if (survey.resources) {
-                    update.resources = resourceKeys;
-                }
-
-                if (survey.binaryDefaults) {
-                    update.binaryDefaults = binaryDefaultKeys;
-                }
-
-                // Update the existing survey
-                return server.surveys.update(update);
-            })
+            .update(_serializeSurvey(survey))
             .then(_firstItemOnly)
-            .then((result) => {
-                const tasks = [];
-                // Add new or update existing resources, combining binaryDefaults and form resources
-                (survey.resources || [])
-                    .concat(survey.binaryDefaults || [])
-                    .forEach((file) => {
-                        tasks.push(
-                            surveyStore.resource.update(survey.enketoId, file)
-                        );
-                    });
-                // Remove obsolete resources
-                obsoleteResources
-                    .concat(obsoleteBinaryDefaults)
-                    .forEach((key) => {
-                        tasks.push(
-                            surveyStore.resource
-                                .remove(survey.enketoId, key)
-                                .then(() => null)
-                        );
-                    });
-
-                // Execution
-                return Promise.all(tasks).then((resources) => {
-                    if (survey.resources) {
-                        result.resources = resources.filter(
-                            (resource) => resource != null
-                        );
-                    }
-
-                    return _deserializeSurvey(result);
-                });
-            });
+            .then(_deserializeSurvey);
     },
     /**
-     * Removes survey form and all its resources
+     * Removes survey form
      *
      * @param  { string } id - Enketo form ID
      * @return { Promise<void> } [description]
      */
     remove(id) {
-        let resources;
-        const tasks = [];
-
-        return surveyStore
-            .get(id)
-            .then((survey) => {
-                resources = survey.resources || [];
-                resources.forEach((resource) => {
-                    tasks.push(surveyStore.resource.remove(id, resource));
-                });
-                tasks.push(server.surveys.remove(id));
-
-                return Promise.all(tasks);
-            })
-            .then(() => {});
+        return server.surveys.remove(id);
     },
     /**
-     * removes all surveys and survey resources
+     * removes all surveys
      *
      * @return { Promise } [description]
      */
     removeAll() {
-        return _flushTable('surveys').then(() => _flushTable('resources'));
-    },
-    resource: {
-        /**
-         * Obtains a form resource
-         *
-         * @param  { string } id -  Enketo survey ID
-         * @param  { string } url - URL of resource
-         * @return { Promise<Blob> } A promise resolving with the file.
-         */
-        get(id, url) {
-            return _getFile('resources', id, url);
-        },
-        /**
-         * Updates a form resource in storage or creates it if it does not yet exist.
-         *
-         * @param { string } id - Enketo survey ID
-         * @param {{item:Blob, url:string}} resource - Form resource to update.
-         * @return {Promise<Blob>}         A promise resolving with the file that was updated.
-         */
-        update(id, resource) {
-            return _updateFile('resources', id, resource);
-        },
-        /**
-         * Removes form resource
-         *
-         * @param  { string } id -  Enketo survey ID
-         * @param  { string } url - URL of resource
-         * @return { Promise } [description]
-         */
-        remove(id, url) {
-            return server.resources.remove(`${id}:${url}`);
-        },
+        return _flushTable('surveys');
     },
 };
 
@@ -553,6 +408,12 @@ const dataStore = {
         return dataStore.remove(id);
     },
 };
+
+/**
+ * @typedef RecordFile
+ * @property {string} name
+ * @property {Blob} item
+ */
 
 const recordStore = {
     /**
@@ -796,23 +657,44 @@ const recordStore = {
         /**
          * Obtains a file belonging to a record
          *
-         * @param  { string } instanceId - The instanceId that is part of the record (meta>instancID)
-         * @param  { string } fileKey -     unique key that identifies the file in the record (meant to be fileName)
-         * @return { Promise }  A promise resolving with a File.
+         * @param  {string} instanceId
+         * @param  {string} namefileName)
+         * @return {Promise<RecordFile>}
          */
-        get(instanceId, fileKey) {
-            return _getFile('files', instanceId, fileKey);
+        async get(instanceId, name) {
+            const item = await server.files.get(`${instanceId}:${name}`);
+
+            if (item != null) {
+                return { name, item };
+            }
         },
         /**
          * Updates an file belonging to a record in storage or creates it if it does not yet exist. This function is exported
          * for testing purposes, but not actually used as a public function in Enketo.
          *
-         * @param  { string }                     instanceId -  instanceId that is part of the record (meta>instancID)
-         * @param  {{item:Blob, name:string }}   file -        file object
-         * @return { Promise } A promise resolving with the File.
+         * @param  {string} [instanceId]
+         * @param  {RecordFile} [file]
+         * @return {Promise<RecordFile>}
          */
-        update(instanceId, file) {
-            return _updateFile('files', instanceId, file);
+        async update(instanceId, file = {}) {
+            const { name, item: blob } = file;
+
+            if (instanceId == null || name == null || !(blob instanceof Blob)) {
+                const error = new Error(
+                    'DataError. File not complete or ID not provided.'
+                );
+
+                error.name = 'DataError';
+
+                throw error;
+            }
+
+            const key = `${instanceId}:${name}`;
+            const item = blobEncoding ? await utils.blobToDataUri(blob) : blob;
+
+            await server.files.update({ key, item });
+
+            return file;
         },
         /**
          * Removes a record file
@@ -902,101 +784,6 @@ function _deserializeSurvey(survey) {
 }
 
 /**
- * Obtains a file from a specified table
- *
- * @param  { string } table - database table name
- * @param  { string } id -    Enketo id of the survey
- * @param  { string } key -   unique key of the file (url or fileName)
- * @return {Promise<Blob>} A promise that resolves with a File.
- */
-function _getFile(table, id, key) {
-    let prop;
-    const file = {};
-
-    return new Promise((resolve, reject) => {
-        if (table === 'resources' || table === 'files') {
-            prop = table === 'resources' ? 'url' : 'name';
-
-            return server[table]
-                .get(`${id}:${key}`)
-                .then((item) => {
-                    file[prop] = key;
-                    if (item instanceof Blob) {
-                        file.item = item;
-                        resolve(file);
-                    } else if (typeof item === 'string') {
-                        utils.dataUriToBlob(item).then((item) => {
-                            file.item = item;
-                            resolve(file);
-                        });
-                    } else {
-                        // if item is falsy or unexpected
-                        resolve(undefined);
-                    }
-                })
-                .catch(reject);
-        }
-        reject(new Error('Unknown table or missing id or key.'));
-    });
-}
-
-/**
- * Updates a file in a specified table or creates a new db entry if it doesn't exist.
- *
- * @param { string } table - database table name
- * @param { string } id -    Enketo id of the survey
- * @param { object } file - new file object (url or name property)
- * @param { string } [file.url] - url of the file
- * @param { string } [file.name] - name of the file (required if url not provided)
- * @param {Blob} file.item - the new file
- * @return { Promise }       [description]
- */
-function _updateFile(table, id, file) {
-    let error;
-    let prop;
-    let propValue;
-
-    if (table === 'resources' || table === 'files') {
-        prop = table === 'resources' ? 'url' : 'name';
-        if (id && file && file.item instanceof Blob && file[prop]) {
-            propValue = file[prop];
-            file.key = `${id}:${file[prop]}`;
-            delete file[prop];
-            /*
-             * IE doesn't like complex objects with Blob properties so we store
-             * the blob as the value.
-             * The files table does not have a keyPath for this reason.
-             * The format of file (item: Blob, key: string) is db.js way of directing
-             * it to store the blob instance as the value.
-             */
-            if (blobEncoding) {
-                return utils.blobToDataUri(file.item).then((convertedBlob) => {
-                    file.item = convertedBlob;
-
-                    return server[table].update(file).then(() => {
-                        file[prop] = propValue;
-                        delete file.key;
-
-                        return file;
-                    });
-                });
-            }
-            return server[table].update(file).then(() => {
-                file[prop] = propValue;
-                delete file.key;
-
-                return file;
-            });
-        }
-        error = new Error('DataError. File not complete or ID not provided.');
-        error.name = 'DataError';
-
-        return Promise.reject(error);
-    }
-    return Promise.reject(new Error('Unknown table or missing ID or key.'));
-}
-
-/**
  * Completely remove the database (no db.js function for this yet)
  *
  * @return { object } [description]
@@ -1042,30 +829,6 @@ function _flushTable(table) {
 
 // debugging utilities: TODO: should move elsewhere or be turned into useful functions that return promises
 const dump = {
-    resources() {
-        server.resources
-            .query()
-            .all()
-            .execute()
-            .done((results) => {
-                console.log(`${results.length} resources found`);
-                results.forEach((item) => {
-                    if (item instanceof Blob) {
-                        console.log(
-                            item.type,
-                            item.size,
-                            URL.createObjectURL(item)
-                        );
-                    } else {
-                        console.log(
-                            'resource string with length ',
-                            item.length,
-                            'found'
-                        );
-                    }
-                });
-            });
-    },
     surveys() {
         server.surveys
             .query()

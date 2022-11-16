@@ -9,11 +9,12 @@ import settings from './settings';
 import connection from './connection';
 import utils from './utils';
 import { t } from './translator';
+import { getMediaURL } from './media';
 
 const URL_RE = /[a-zA-Z0-9+-.]+?:\/\//;
 
 /** @type {Record<string, string>} */
-let instanceAttachments;
+let media;
 
 /**
  * Initialize the file manager .
@@ -34,13 +35,13 @@ function isWaitingForPermissions() {
 }
 
 /**
- * Sets instanceAttachments containing filename:url map
+ * Sets media mapping containing filename:url map
  * to use in getFileUrl
  *
- * @param {{filename: string}} attachments - attachments sent with record to be loaded
+ * @param {{filename: string}} media - attachments sent with record to be loaded
  */
-function setInstanceAttachments(attachments) {
-    instanceAttachments = attachments;
+function setMediaMap(mediaMap) {
+    media = mediaMap;
 }
 /**
  * Obtains a url that can be used to show a preview of the file when used
@@ -54,43 +55,17 @@ function getFileUrl(subject) {
         if (!subject) {
             resolve(null);
         } else if (typeof subject === 'string') {
-            const escapedSubject = encodeURIComponent(subject);
-
             if (subject.startsWith('/')) {
                 resolve(subject);
-            } else if (
-                instanceAttachments &&
-                Object.prototype.hasOwnProperty.call(
-                    instanceAttachments,
-                    escapedSubject
-                )
-            ) {
-                resolve(instanceAttachments[escapedSubject]);
-            } else if (
-                instanceAttachments &&
-                Object.prototype.hasOwnProperty.call(
-                    instanceAttachments,
-                    subject
-                )
-            ) {
-                resolve(instanceAttachments[subject]);
+            }
+
+            const url = getMediaURL(media, subject);
+
+            if (url != null && (URL_RE.test(url) || url.startsWith('/'))) {
+                resolve(url);
             } else if (!settings.offline || !store.available) {
                 // e.g. in an online-only edit view
                 reject(new Error('store not available'));
-            } else if (URL_RE.test(subject)) {
-                // Any URL values are default binary values. These should only occur in offline-capable views,
-                // because the form cache module removed the src attributes
-                // (which are /urls/like/this/http:// and are caught above this statement)
-                store.survey.resource
-                    .get(settings.enketoId, subject)
-                    .then((file) => {
-                        if (file.item) {
-                            resolve(URL.createObjectURL(file.item));
-                        } else {
-                            reject(new Error('File Retrieval Error'));
-                        }
-                    })
-                    .catch(reject);
             } else {
                 // obtain file from storage
                 store.record.file
@@ -270,7 +245,7 @@ function getMaxSizeReadable() {
 export default {
     isWaitingForPermissions,
     init,
-    setInstanceAttachments,
+    setMediaMap,
     getFileUrl,
     getObjectUrl,
     getCurrentFiles,

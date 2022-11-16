@@ -101,6 +101,10 @@ describe('Support for jr://instance/last-saved endpoint', () => {
         // Prevent calls to `_updateCache` after tests complete/stubs are restored
         timers = sandbox.useFakeTimers();
 
+        sandbox.stub(window, 'queueMicrotask').callsFake(() => {
+            // Prevent unexpected updates on `formCache.init`.
+        });
+
         sandbox.stub(settings, 'enketoId').get(() => enketoId);
 
         autoSavedKey = records.getAutoSavedKey();

@@ -19,7 +19,7 @@ import {
 import records from './records-queue';
 import encryptor from './encryptor';
 import { getLastSavedRecord, populateLastSavedInstances } from './last-saved';
-import { replaceMediaSources, replaceModelMediaSources } from './media';
+import { replaceMediaSources } from './media';
 
 /**
  * @typedef {import('../../../../app/models/survey-model').SurveyObject} Survey
@@ -77,9 +77,7 @@ function init(formEl, data, loadErrors = []) {
 
             data.submitted = Boolean(data.isEditing);
 
-            if (data.instanceAttachments) {
-                fileManager.setInstanceAttachments(data.instanceAttachments);
-            }
+            fileManager.setMediaMap(media);
 
             const langSelector = formEl.querySelector('#form-languages');
             const formDefaultLanguage = langSelector
@@ -99,7 +97,6 @@ function init(formEl, data, loadErrors = []) {
             }
 
             form = new Form(formEl, data, formOptions);
-            replaceModelMediaSources(form, media);
 
             loadErrors = loadErrors.concat(form.init());
 
@@ -220,8 +217,6 @@ function _resetForm(survey) {
                 },
                 formOptions
             );
-
-            replaceModelMediaSources(form, survey.media);
 
             const loadErrors = form.init();
 

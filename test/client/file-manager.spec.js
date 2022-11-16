@@ -23,11 +23,11 @@ describe('File manager', () => {
 
         describe('instance attachments', () => {
             afterEach(() => {
-                fileManager.setInstanceAttachments(null);
+                fileManager.setMediaMap(null);
             });
 
             it('gets a URL from instance attachments by filename', async () => {
-                fileManager.setInstanceAttachments({
+                fileManager.setMediaMap({
                     'relative.png': 'https://example.com/path/to/relative.png',
                 });
 
@@ -39,7 +39,7 @@ describe('File manager', () => {
             });
 
             it('gets a URL from instance attachments by filename with a space', async () => {
-                fileManager.setInstanceAttachments({
+                fileManager.setMediaMap({
                     'space madness.png':
                         'https://example.com/path/to/space%20madness.png',
                 });
@@ -54,7 +54,7 @@ describe('File manager', () => {
             });
 
             it('gets a URL from instance attachments by filename with an escaped space', async () => {
-                fileManager.setInstanceAttachments({
+                fileManager.setMediaMap({
                     'space%20madness.png':
                         'https://example.com/path/to/space%20madness.png',
                 });
@@ -69,7 +69,7 @@ describe('File manager', () => {
             });
 
             it('gets a URL from instance attachments by escaped filename with an escaped space', async () => {
-                fileManager.setInstanceAttachments({
+                fileManager.setMediaMap({
                     'space%20madness.png':
                         'https://example.com/path/to/space%20madness.png',
                 });
@@ -84,7 +84,7 @@ describe('File manager', () => {
             });
         });
 
-        describe('cached resources', () => {
+        describe('cached files', () => {
             const enketoId = 'survey a';
             const recordId = 'record 1';
 
@@ -123,35 +123,8 @@ describe('File manager', () => {
                 await store.init();
             });
 
-            it('gets a blob URL from a cached resource URL', async () => {
-                const fileContents = 'file contents';
-                const url = 'https://example.com/the%20blob.png';
-                const resource = {
-                    item: new Blob([fileContents]),
-                    url,
-                };
-
-                await store.survey.resource.update(enketoId, resource);
-
-                const blobURL = await fileManager.getFileUrl(url);
-
-                expect(blobURL).to.match(/^blob:/);
-
-                const response = await fetch(blobURL);
-                const blobResult = await response.blob();
-
-                expect(blobResult).to.be.an.instanceof(Blob);
-
-                const data = await blobResult.text();
-
-                expect(data).to.equal(fileContents);
-            });
-
             it('fails if the cache store is not available', async () => {
-                const resourceGetStub = sandbox.stub(
-                    store.survey.resource,
-                    'get'
-                );
+                const fileGetStub = sandbox.stub(store.record.file, 'get');
 
                 /** @type {Error} */
                 let caught;
@@ -159,41 +132,24 @@ describe('File manager', () => {
                 isStoreAvailable = false;
 
                 try {
-                    await fileManager.getFileUrl(
-                        'https://example.com/anything.png'
-                    );
+                    await fileManager.getFileUrl('anything.png');
                 } catch (error) {
                     caught = error;
                 }
 
                 expect(caught).to.be.an.instanceof(Error);
-                expect(resourceGetStub).not.to.have.been.called;
-            });
-
-            it('fails if the resource URL is not cached', async () => {
-                const resourceURL = 'https://example.com/anything.png';
-
-                /** @type {Error} */
-                let caught;
-
-                try {
-                    await fileManager.getFileUrl(resourceURL);
-                } catch (error) {
-                    caught = error;
-                }
-
-                expect(caught).to.be.an.instanceof(Error);
+                expect(fileGetStub).not.to.have.been.called;
             });
 
             it('gets a blob URL from a cached file upload', async () => {
                 const fileContents = 'file contents';
                 const name = 'the blob.png';
-                const resource = {
+                const file = {
                     item: new Blob([fileContents]),
                     name,
                 };
 
-                await store.record.file.update(recordId, resource);
+                await store.record.file.update(recordId, file);
 
                 const blobURL = await fileManager.getFileUrl(name);
 
@@ -209,20 +165,17 @@ describe('File manager', () => {
                 expect(data).to.equal(fileContents);
             });
 
-            it('fails if not in offline-capable mode, if the store is available and the resource is cached', async () => {
+            it('fails if not in offline-capable mode, if the store is available and the file is cached', async () => {
                 const fileContents = 'file contents';
                 const name = 'the blob.png';
-                const resource = {
+                const file = {
                     item: new Blob([fileContents]),
                     name,
                 };
 
-                await store.record.file.update(recordId, resource);
+                await store.record.file.update(recordId, file);
 
-                const resourceGetStub = sandbox.stub(
-                    store.survey.resource,
-                    'get'
-                );
+                const fileGetStub = sandbox.stub(store.record.file, 'get');
 
                 /** @type {Error} */
                 let caught;
@@ -236,7 +189,7 @@ describe('File manager', () => {
                 }
 
                 expect(caught).to.be.an.instanceof(Error);
-                expect(resourceGetStub).not.to.have.been.called;
+                expect(fileGetStub).not.to.have.been.called;
             });
 
             it('fails if the file is not cached', async () => {
@@ -260,14 +213,14 @@ describe('File manager', () => {
 
                 const fileContents = 'file contents';
                 const name = 'the blob.png';
-                const resource = {
+                const file = {
                     item: new Blob([fileContents]),
                     name,
                 };
 
-                maxSize = resource.item.size - 1;
+                maxSize = file.item.size - 1;
 
-                await store.record.file.update(recordId, resource);
+                await store.record.file.update(recordId, file);
 
                 try {
                     await fileManager.getFileUrl(name);

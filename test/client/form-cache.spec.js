@@ -74,6 +74,7 @@ describe('Client Form Cache', () => {
 
         // Prevent calls to `_updateCache` after tests complete/stubs are restored
         timers = sandbox.useFakeTimers();
+        sandbox.stub(window, 'queueMicrotask').callsFake(() => {});
 
         lastSavedExternalData = {
             id: 'last-saved',

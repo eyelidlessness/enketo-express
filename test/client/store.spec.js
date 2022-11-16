@@ -154,63 +154,6 @@ describe('Client Storage', () => {
         });
     });
 
-    describe('storing (form) resources', () => {
-        afterEach((done) => {
-            store.survey.removeAll().then(done, done);
-        });
-
-        it('fails if the resource has no "url" property', (done) => {
-            store.survey.resource
-                .update('abcd', {
-                    something: 'something',
-                })
-                .catch((e) => {
-                    expect(e.name).to.equal('DataError');
-                    done();
-                });
-        });
-
-        it('fails if the setting object has no "item" property', (done) => {
-            store.survey.resource
-                .update('abcd', {
-                    url: 'something',
-                })
-                .catch((e) => {
-                    expect(e.name).to.equal('DataError');
-                    done();
-                });
-        });
-
-        it('fails if the "item" is not a Blob', (done) => {
-            store.survey.resource
-                .update('abcd', {
-                    key: 'something',
-                })
-                .catch((e) => {
-                    expect(e.name).to.equal('DataError');
-                    done();
-                });
-        });
-
-        it('succeeds if key and item are present and item is a Blob', (done) => {
-            const id = 'TESt';
-            const { type } = resourceA.item;
-            const { size } = resourceA.item;
-            const { url } = resourceA;
-
-            store.survey.resource
-                .update(id, resourceA)
-                .then(() => store.survey.resource.get(id, url))
-                .then((result) => {
-                    expect(result.item.type).to.equal(type);
-                    expect(result.item.size).to.equal(size);
-                    expect(result.item).to.be.an.instanceof(Blob);
-                    expect(result.url).to.equal(url);
-                })
-                .then(done, done);
-        });
-    });
-
     describe('storing surveys', () => {
         afterEach((done) => {
             store.survey.removeAll().then(done, done);
@@ -314,67 +257,6 @@ describe('Client Storage', () => {
                 })
                 .then(done, done);
         });
-
-        it('succeeds if the survey has the required properties and contains file resources', (done) => {
-            const urlA = resourceA.url;
-            const { type } = resourceA.item;
-            const { size } = resourceA.item;
-
-            store.survey
-                .set(surveyA)
-                .then(() => {
-                    surveyA.resources = [resourceA, resourceB];
-                    return store.survey.update(surveyA);
-                })
-                .then((result) => {
-                    // check response of updateSurvey
-                    expect(result).to.deep.equal(surveyA);
-                    return store.survey.resource.get(result.enketoId, urlA);
-                })
-                .then((result) => {
-                    // check response of getResource
-                    expect(result.item.type).to.equal(type);
-                    expect(result.item.size).to.equal(size);
-                    expect(result.item).to.be.an.instanceof(Blob);
-                })
-                .then(done, done);
-        });
-
-        it('removes any form resources that have become obsolete', (done) => {
-            const urlA = resourceA.url;
-            const urlB = resourceB.url;
-            const itemA = new Blob([resourceA.item], {
-                type: resourceA.type,
-            });
-
-            store.survey
-                .set(surveyA)
-                .then(() => {
-                    // store 2 resources
-                    surveyA.resources = [resourceA, resourceB];
-                    return store.survey.update(surveyA);
-                })
-                .then(() => {
-                    // update survey to contain only 1 resource
-                    surveyA.resources = [
-                        {
-                            url: urlA,
-                            item: itemA,
-                        },
-                    ];
-                    return store.survey.update(surveyA);
-                })
-                .then((result) => {
-                    // check response of updateSurvey
-                    expect(result).to.deep.equal(surveyA);
-                    return store.survey.resource.get(result.enketoId, urlB);
-                })
-                .then((result) => {
-                    // check response of getResource
-                    expect(result).to.equal(undefined);
-                })
-                .then(done, done);
-        });
     });
 
     describe('removing surveys', () => {
@@ -391,26 +273,6 @@ describe('Client Storage', () => {
                     expect(result).to.equal(undefined);
                 })
                 .then(done, done);
-        });
-
-        it('succeeds if the survey contains files', (done) => {
-            const { url } = resourceA;
-
-            surveyA.enketoId += Math.random();
-
-            store.survey
-                .set(surveyA)
-                .then(() => {
-                    surveyA.resources = [resourceA, resourceB];
-                    return store.survey.update(surveyA);
-                })
-                .then(() => store.survey.remove(surveyA.enketoId))
-                .then(() => store.survey.resource.get(surveyA.enketoId, url))
-                .then((result) => {
-                    expect(result).to.equal(undefined);
-                    done();
-                })
-                .catch(done);
         });
     });
 
