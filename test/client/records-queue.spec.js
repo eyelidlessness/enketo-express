@@ -135,8 +135,6 @@ describe('Records queue', () => {
                     files: [],
                 })
             )
-            .then(() => store.survey.set(surveyA))
-            .then(() => store.survey.set(surveyB))
             .then(() => done(), done);
     });
 
@@ -146,7 +144,6 @@ describe('Records queue', () => {
         Promise.all([
             store.property.removeAll(),
             store.record.removeAll(),
-            store.survey.removeAll(),
         ]).then(() => done(), done);
     });
 
@@ -155,7 +152,7 @@ describe('Records queue', () => {
             const originalRecord = { ...recordA };
 
             records
-                .save('set', recordA)
+                .save(surveyA, 'set', recordA)
                 .then(() => store.record.get(instanceIdA))
                 .then((record) => {
                     Object.entries(originalRecord).forEach(([key, value]) => {
@@ -191,7 +188,7 @@ describe('Records queue', () => {
 
             records
                 .updateAutoSavedRecord(autoSavedUpdate)
-                .then(() => records.save('set', recordA))
+                .then(() => records.save(surveyA, 'set', recordA))
                 .then(() => store.record.get(instanceIdA))
                 .then((record) => {
                     expect(record.files.length).to.equal(files.length);
@@ -217,8 +214,8 @@ describe('Records queue', () => {
             const payload = { ...update };
 
             records
-                .save('set', recordA)
-                .then(() => records.save('update', payload))
+                .save(surveyA, 'set', recordA)
+                .then(() => records.save(surveyA, 'update', payload))
                 .then(() => store.record.get(instanceIdA))
                 .then((record) => {
                     Object.entries(update).forEach(([key, value]) => {
@@ -236,8 +233,8 @@ describe('Records queue', () => {
             const expectedRecordData = [{ ...recordA }, { ...recordB }];
 
             records
-                .save('set', recordA)
-                .then(() => records.save('set', recordB))
+                .save(surveyA, 'set', recordA)
+                .then(() => records.save(surveyB, 'set', recordB))
                 .then(() => records.getDisplayableRecordList(enketoId))
                 .then((records) => {
                     expect(records.length).to.equal(expectedRecordData.length);
@@ -290,8 +287,8 @@ describe('Records queue', () => {
                 });
 
             records
-                .save('set', recordA)
-                .then(() => records.save('set', recordB))
+                .save(surveyA, 'set', recordA)
+                .then(() => records.save(surveyB, 'set', recordB))
                 .then(() =>
                     store.record.set({
                         draft: true,

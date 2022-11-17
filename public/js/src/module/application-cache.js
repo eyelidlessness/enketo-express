@@ -1,24 +1,10 @@
 /**
- * Deals with storing the app using service workers.
+ * Deals with storing the app and cached form resources using service workers.
  */
 
 import events from './event';
 import settings from './settings';
-
-/**
- * @private
- *
- * Used only for mocking `window.reload` in tests.
- */
-const location = {
-    get protocol() {
-        return window.location.protocol;
-    },
-
-    reload() {
-        window.location.reload();
-    },
-};
+import * as unmockable from './unmockable';
 
 /**
  * @private
@@ -35,19 +21,38 @@ const RELOAD_ON_UPDATE_TIMEOUT = 500;
 const UPDATE_REGISTRATION_INTERVAL = 60 * 60 * 1000;
 
 /**
+ * @private
+ *
+ * Exported only for testing.
+ */
+const UPDATE_FORM_INTERVAL = 20 * 60 * 1000;
+
+/**
+ * @param {ServiceWorker} worker
+ * @param {string} enketoId
+ */
+const checkFormHash = (worker, enketoId) => {
+    worker.postMessage({
+        type: 'CHECK_FORM_HASH',
+        enketoId,
+        url: unmockable.location.href,
+    });
+};
+
+/**
  * @typedef {import('../../../../app/models/survey-model').SurveyObject} Survey
  */
 
 /**
- * @param {Survey} survey
+ * @param {string} enketoId
  */
-const init = async (survey) => {
+const init = async (enketoId) => {
     const { serviceWorker } = navigator;
 
     try {
         if (serviceWorker != null) {
             const workerPath = `${settings.basePath}/x/offline-app-worker.js`;
-            const workerURL = new URL(workerPath, window.location.href);
+            const workerURL = new URL(workerPath, unmockable.location.href);
 
             workerURL.searchParams.set('version', settings.version);
 
@@ -74,10 +79,27 @@ const init = async (survey) => {
             const currentActive = registration.active;
 
             if (currentActive != null) {
+                serviceWorker.addEventListener('message', (event) => {
+                    const { type, enketoId: updatedEnketoId } = event.data;
+
+                    if (
+                        type === 'FORM_UPDATED' &&
+                        updatedEnketoId === enketoId
+                    ) {
+                        console.log('Form updated, notifying user...');
+                        document.dispatchEvent(events.FormUpdated());
+                    }
+                });
+
+                checkFormHash(currentActive, enketoId);
+                setInterval(() => {
+                    checkFormHash(currentActive, enketoId);
+                }, UPDATE_FORM_INTERVAL);
+
                 serviceWorker.addEventListener('controllerchange', () => {
                     if (reloadOnUpdate) {
                         console.log('Service worker updated, reloading...');
-                        location.reload();
+                        unmockable.location.reload();
                     } else {
                         console.log(
                             'Service worker updated, notifying user...'
@@ -91,12 +113,12 @@ const init = async (survey) => {
             registration.update();
 
             if (currentActive == null) {
-                location.reload();
+                unmockable.location.reload();
             } else {
                 _reportOfflineLaunchCapable(true);
             }
         } else {
-            if (location.protocol.startsWith('http:')) {
+            if (unmockable.location.protocol.startsWith('http:')) {
                 console.error(
                     'Service workers not supported on this http URL (insecure)'
                 );
@@ -120,8 +142,6 @@ const init = async (survey) => {
 
         throw registrationError;
     }
-
-    return survey;
 };
 
 function _reportOfflineLaunchCapable(capable = true) {
@@ -130,9 +150,9 @@ function _reportOfflineLaunchCapable(capable = true) {
 
 export default {
     init,
-    location,
     RELOAD_ON_UPDATE_TIMEOUT,
     UPDATE_REGISTRATION_INTERVAL,
+    UPDATE_FORM_INTERVAL,
     get serviceWorkerScriptUrl() {
         const { serviceWorker } = navigator;
 

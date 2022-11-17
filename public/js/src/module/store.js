@@ -6,9 +6,6 @@ import db from 'db.js';
 import utils from './utils';
 import sniffer from './sniffer';
 import { t } from './translator';
-import encryptor from './encryptor';
-
-const parser = new DOMParser();
 
 /**
  * @typedef {import('db.js')}
@@ -31,7 +28,7 @@ let blobEncoding;
 let available = false;
 
 const databaseName = 'enketo';
-const version = 5;
+const version = 6;
 
 const REMOVE_RECORD_NAME_UNIQUENESS_VERSION = 4;
 
@@ -100,18 +97,6 @@ function init({ failSilently } = {}) {
                 server: databaseName,
                 version,
                 schema: {
-                    // the surveys
-                    surveys: {
-                        key: {
-                            keyPath: 'enketoId',
-                            autoIncrement: false,
-                        },
-                        indexes: {
-                            enketoId: {
-                                unique: true,
-                            },
-                        },
-                    },
                     // Records in separate table because it makes more sense for getting, updating and removing records
                     // if they are not stored in one (giant) array or object value.
                     // Need to watch out for bad iOS bug: http://www.raymondcamden.com/2014/9/25/IndexedDB-on-iOS-8--Broken-Bad
@@ -308,70 +293,6 @@ const propertyStore = {
 
             return propertyStore.update(stats);
         });
-    },
-};
-
-const surveyStore = {
-    /**
-     * Obtains a single survey's form HTML and XML model, theme, external instances from storage
-     *
-     * @param  { string } id - [description]
-     * @return { Promise<Survey> }    [description]
-     */
-    get(id) {
-        return server.surveys
-            .get(id)
-            .then(_firstItemOnly)
-            .then(_deserializeSurvey);
-    },
-    /**
-     * Stores a single survey's form HTML and XML model, theme, external instances
-     *
-     * @param { Survey } survey - [description]
-     * @return { Promise<Survey> }        [description]
-     */
-    set(survey) {
-        if (!survey.form || !survey.model || !survey.enketoId || !survey.hash) {
-            throw new Error('Survey not complete');
-        }
-
-        return server.surveys
-            .add(_serializeSurvey(survey))
-            .then(_firstItemOnly)
-            .then(_deserializeSurvey);
-    },
-    /**
-     * Updates a single survey's form HTML and XML model belonging to the form
-     *
-     * @param  { Survey } survey - [description]
-     * @return { Promise<Survey> }        [description]
-     */
-    update(survey) {
-        if (!survey.form || !survey.model || !survey.enketoId) {
-            throw new Error('Survey not complete');
-        }
-
-        return server.surveys
-            .update(_serializeSurvey(survey))
-            .then(_firstItemOnly)
-            .then(_deserializeSurvey);
-    },
-    /**
-     * Removes survey form
-     *
-     * @param  { string } id - Enketo form ID
-     * @return { Promise<void> } [description]
-     */
-    remove(id) {
-        return server.surveys.remove(id);
-    },
-    /**
-     * removes all surveys
-     *
-     * @return { Promise } [description]
-     */
-    removeAll() {
-        return _flushTable('surveys');
     },
 };
 
@@ -726,64 +647,6 @@ function _firstItemOnly(results) {
 }
 
 /**
- * Serializes a survey for storage in IndexedDB:
- *
- * - externalData XMLDocuments are serialized to strings
- * - surveys with encryption enabled are converted to a state which can be deserialized on retrieval
- *
- * @see {encryptor.serializeEncryptedSurvey}
- * @param {Survey} survey
- * @return {Promise<Survey>}
- */
-function _serializeSurvey(survey) {
-    if (survey) {
-        if (survey.externalData) {
-            survey.externalData = survey.externalData.map((instance) => {
-                if (instance.xml instanceof XMLDocument) {
-                    instance.xml = new XMLSerializer().serializeToString(
-                        instance.xml.documentElement,
-                        'text/xml'
-                    );
-                }
-
-                return instance;
-            });
-        }
-
-        return encryptor.serializeEncryptedSurvey(survey);
-    }
-}
-
-/**
- * Deserializes a survey retrieved from IndexedDB:
- *
- * - externalData strings are deserialized to XMLDocuments
- * - surveys which should have encryption enabled are restored to that state
- *
- * @see {encryptor.deserializeEncryptedSurvey}
- * @param {Survey} survey
- * @return {Promise<Survey>}
- */
-function _deserializeSurvey(survey) {
-    if (survey) {
-        if (survey.externalData) {
-            survey.externalData = survey.externalData.map((instance) => {
-                if (typeof instance.xml === 'string') {
-                    instance.xml = parser.parseFromString(
-                        instance.xml,
-                        'text/xml'
-                    );
-                }
-
-                return instance;
-            });
-        }
-
-        return encryptor.deserializeEncryptedSurvey(survey);
-    }
-}
-
-/**
  * Completely remove the database (no db.js function for this yet)
  *
  * @return { object } [description]
@@ -885,7 +748,6 @@ export default {
         return available;
     },
     property: propertyStore,
-    survey: surveyStore,
     dynamicData: dataStore,
     record: recordStore,
     flush,

@@ -12,7 +12,6 @@ import {
 import store from './module/store';
 import utils from './module/utils';
 import events from './module/event';
-import formCache from './module/form-cache';
 import applicationCache from './module/application-cache';
 
 const loader = document.querySelector('.main-loader');
@@ -21,6 +20,7 @@ const survey = {
     enketoId: settings.enketoId,
     xformUrl: settings.xformUrl,
     defaults: settings.defaults,
+    isPreview: settings.type === 'preview',
 };
 const range = document.createRange();
 
@@ -30,13 +30,15 @@ if (settings.offline) {
     console.log('App in offline-capable mode.');
     delete survey.xformUrl;
     _setAppCacheEventHandlers();
-    applicationCache
-        .init(survey)
+
+    store
+        .init()
+        .then(() => applicationCache.init(survey.enketoId))
         .then(initTranslator)
-        .then(formCache.init)
+        .then(() => connection.getFormParts(survey))
         .then(_addBranding)
         .then(_swapTheme)
-        .then(formCache.updateMaxSubmissionSize)
+        .then(connection.getMaximumSubmissionSize)
         .then(_updateMaxSizeSetting)
         .then(_init)
         .then((formParts) => {
@@ -50,13 +52,8 @@ if (settings.offline) {
     console.log('App in online-only mode.');
     store
         .init({ failSilently: true })
-        .then(() => initTranslator(survey))
-        .then((props) =>
-            connection.getFormParts({
-                ...props,
-                isPreview: settings.type === 'preview',
-            })
-        )
+        .then(initTranslator)
+        .then(() => connection.getFormParts(survey))
         .then(_swapTheme)
         .then(_addBranding)
         .then(connection.getMaximumSubmissionSize)
@@ -97,10 +94,12 @@ function _setAppCacheEventHandlers() {
         gui.updateStatus.offlineCapable(capable);
 
         const scriptUrl = applicationCache.serviceWorkerScriptUrl;
+
         if (scriptUrl) {
-            connection
-                .getServiceWorkerVersion(scriptUrl)
-                .then(gui.updateStatus.applicationVersion);
+            const { searchParams } = new URL(scriptUrl);
+            const version = searchParams.get('version');
+
+            gui.updateStatus.applicationVersion(version);
         }
     });
 

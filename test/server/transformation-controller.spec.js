@@ -95,8 +95,8 @@ describe('Transformation Controller', () => {
     /** @type {string} */
     let transformRequestURL;
 
-    /** @type {object | undefined} */
-    let transformRequestBody;
+    /** @type {object} */
+    let transformRequestQueryParams;
 
     /** @type {string} */
     let xform;
@@ -112,9 +112,17 @@ describe('Transformation Controller', () => {
      * @return {import('enketo-transformer/src/transformer').TransformedSurvey}
      */
     const getTransformResult = async () => {
+        const url = new URL(
+            `${basePath}${transformRequestURL}`,
+            'https://example.org'
+        );
+
+        Object.entries(transformRequestQueryParams).forEach(([key, value]) => {
+            url.searchParams.set(key, value);
+        });
+
         const { body } = await request(app)
-            .post(`${basePath}${transformRequestURL}`)
-            .send(transformRequestBody)
+            .get(`${url.pathname}${url.search}`)
             .expect(200);
 
         return body;
@@ -272,7 +280,7 @@ describe('Transformation Controller', () => {
         describe('cached forms', () => {
             beforeEach(() => {
                 transformRequestURL = `/transform/xform/${enketoId}`;
-                transformRequestBody = undefined;
+                transformRequestQueryParams = {};
             });
 
             // Note: this test previously failed with `getManifest`
@@ -293,7 +301,7 @@ describe('Transformation Controller', () => {
         describe('direct access forms', () => {
             beforeEach(() => {
                 transformRequestURL = `/transform/xform`;
-                transformRequestBody = {
+                transformRequestQueryParams = {
                     xformUrl: 'http://example.com/qwerty',
                 };
             });

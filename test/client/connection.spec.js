@@ -167,10 +167,7 @@ describe('Connection', () => {
 
         const basePath = '-';
 
-        /** @type {string} */
-        let expectedPostBody;
-
-        /** @type {string} */
+        /** @type {URL} */
         let expectedURL;
 
         /** @type {string} */
@@ -188,9 +185,10 @@ describe('Connection', () => {
 
             theme = '';
 
-            expectedPostBody = '';
-
-            expectedURL = `${basePath}/transform/xform/${enketoId}`;
+            expectedURL = new URL(
+                `${basePath}/transform/xform/${enketoId}`,
+                window.location.href
+            );
 
             resolveExternalInstance = true;
 
@@ -221,14 +219,11 @@ describe('Connection', () => {
                 }
 
                 try {
-                    expect(url).to.equal(expectedURL);
+                    expect(url).to.deep.equal(expectedURL);
                     expect(options).to.deep.equal({
-                        method: 'POST',
                         headers: {
                             Accept: 'application/json',
-                            'Content-Type': 'application/x-www-form-urlencoded',
                         },
-                        body: expectedPostBody,
                     });
                 } catch (error) {
                     return {
@@ -262,9 +257,8 @@ describe('Connection', () => {
         it('requests the provided xformUrl', async () => {
             const xformUrl = 'https://example.com/form.xml';
 
-            expectedPostBody = String(
-                new URLSearchParams([['xformUrl', xformUrl]])
-            );
+            expectedURL = new URL(expectedURL);
+            expectedURL.searchParams.set('xformUrl', xformUrl);
 
             const survey = await connection.getFormParts({
                 enketoId,
@@ -320,20 +314,6 @@ describe('Connection', () => {
 
             expect(survey.enketoId).to.equal(enketoId);
             expect(survey.theme).to.equal(theme);
-        });
-
-        // This tests a fix for a regression between the initial introduction of last-saved
-        // which incorrectly cached forms in online-mode, and the refactor of that feature
-        // which removed that caching. Previously, `getFormParts` was converting binary
-        // defaults with relative paths in `survey.model` to absolute URLs to satisfy
-        // behavior in `form-cache.js`. When caching in online mode was removed, this caused
-        // binary defaults to be broken again.
-        it('does not change the model', async () => {
-            const survey = await connection.getFormParts({
-                enketoId,
-            });
-
-            expect(survey.model).to.equal(model);
         });
 
         it('populates external data from external secondary instances', async () => {

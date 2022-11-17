@@ -13,8 +13,8 @@ const survey = {
 };
 const range = document.createRange();
 
-initTranslator(survey)
-    .then((survey) =>
+initTranslator()
+    .then(() =>
         Promise.all([
             connection.getFormParts(survey),
             connection.getExistingInstance(survey),

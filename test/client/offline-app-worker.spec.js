@@ -46,10 +46,12 @@ class PendingResponseMap extends Map {
     }
 }
 
-/** @type {PendingResponseMap<Request | string, Response> */
+/** @type {PendingResponseMap} */
 let pendingResponses;
 
-describe('Offline app (service) worker', () => {
+describe.only('Offline app (service) worker', () => {
+    const basePath = '/-';
+    const enketoId = '3a673';
     const serviceWorkerURL = `${window.location.origin}/public/js/build/offline-app-worker.js`;
 
     /**
@@ -91,14 +93,24 @@ describe('Offline app (service) worker', () => {
     /** @type {sinon.SinonSandbox} */
     let sandbox;
 
+    /** @type {sinon.SinonFakeTimers} */
+    let timers;
+
     /** @type {sinon.SinonStub} */
     let skipWaitingStub;
+
+    /** @type {sinon.SinonStub} */
+    let clientsClaimStub;
 
     /** @type {sinon.SinonStub} */
     let fetchStub;
 
     beforeEach(() => {
         sandbox = sinon.createSandbox();
+        timers = sandbox.useFakeTimers({
+            now: Date.now(),
+            shouldAdvanceTime: true,
+        });
 
         if (!Object.prototype.hasOwnProperty.call(self, 'serviceWorker')) {
             self.serviceWorker = {
@@ -117,6 +129,16 @@ describe('Offline app (service) worker', () => {
         skipWaitingStub = sandbox.fake();
 
         sandbox.stub(self, 'skipWaiting').get(() => skipWaitingStub);
+
+        if (!Object.prototype.hasOwnProperty.call(self, 'clients')) {
+            self.clients = undefined;
+        }
+
+        clientsClaimStub = sandbox.fake();
+
+        sandbox.stub(self, 'clients').get(() => ({
+            claim: clientsClaimStub,
+        }));
 
         pendingResponses = new PendingResponseMap();
 
@@ -137,6 +159,7 @@ describe('Offline app (service) worker', () => {
     });
 
     afterEach(async () => {
+        await timers.runAllAsync();
         sandbox.restore();
 
         const keys = await caches.keys();
@@ -165,6 +188,14 @@ describe('Offline app (service) worker', () => {
             const cacheKeys = await caches.keys();
 
             expect(cacheKeys).to.deep.equal([FORMS_CACHE]);
+        });
+
+        it('claims clients on activation', async () => {
+            const event = new ExtendableEvent('activate');
+
+            await waitForEvent(event);
+
+            expect(clientsClaimStub).to.have.been.calledOnce;
         });
 
         it('caches app resources', async () => {
@@ -583,7 +614,6 @@ describe('Offline app (service) worker', () => {
                 pendingResponses.set(url, response);
             });
 
-            const timers = sandbox.useFakeTimers(Date.now());
             const event = new FetchEvent(request);
             const staticCache = await caches.open(STATIC_CACHE);
             const openCache = caches.open.bind(caches);
@@ -611,6 +641,207 @@ describe('Offline app (service) worker', () => {
                 await timers.runAllAsync();
                 timers.restore();
             }
+        });
+
+        it('notifies a client when a cached form has been updated', async () => {
+            const formURL = new URL(
+                `${basePath}/x/${enketoId}`,
+                window.location.href
+            ).href;
+            const hashURL = new URL(
+                `${basePath}/transform/xform/hash/${enketoId}`,
+                window.location.href
+            ).href;
+            const transformURL = new URL(
+                `${basePath}/transform/xform/${enketoId}`,
+                window.location.href
+            ).href;
+
+            const cache = await caches.open(FORMS_CACHE);
+
+            await cache.put(
+                transformURL,
+                new Response('{"hash": "8675e"}', {
+                    headers: {
+                        'content-type': 'application/json',
+                    },
+                })
+            );
+            pendingResponses.set(
+                hashURL,
+                new Response('{"hash": "123a5"}', {
+                    headers: {
+                        'content-type': 'application/json',
+                    },
+                })
+            );
+
+            const source = new MessageChannel().port1;
+            const postMessageStub = sandbox.stub(source, 'postMessage');
+
+            const messageEvent = new MessageEvent('message', {
+                data: {
+                    type: 'CHECK_FORM_HASH',
+                    enketoId,
+                    url: formURL,
+                },
+                source,
+            });
+
+            self.dispatchEvent(messageEvent);
+
+            const timeout = setTimeout(() => {
+                throw new Error('Timed out');
+            }, 2000);
+
+            while (!postMessageStub.called) {
+                const now = Date.now();
+
+                // eslint-disable-next-line no-await-in-loop
+                await Promise.resolve();
+
+                // eslint-disable-next-line no-await-in-loop
+                await timers.tickAsync(Date.now() - now);
+            }
+
+            clearTimeout(timeout);
+
+            source.removeEventListener('message', postMessageStub);
+
+            expect(postMessageStub).to.have.been.calledOnceWith({
+                type: 'FORM_UPDATED',
+                enketoId,
+            });
+        });
+
+        it('notifies a client when a cached form is up to date', async () => {
+            const formURL = new URL(
+                `${basePath}/x/${enketoId}`,
+                window.location.href
+            ).href;
+            const hashURL = new URL(
+                `${basePath}/transform/xform/hash/${enketoId}`,
+                window.location.href
+            ).href;
+            const transformURL = new URL(
+                `${basePath}/transform/xform/${enketoId}`,
+                window.location.href
+            ).href;
+
+            const cache = await caches.open(FORMS_CACHE);
+
+            await cache.put(
+                transformURL,
+                new Response('{"hash": "8675e"}', {
+                    headers: {
+                        'content-type': 'application/json',
+                    },
+                })
+            );
+            pendingResponses.set(
+                hashURL,
+                new Response('{"hash": "8675e"}', {
+                    headers: {
+                        'content-type': 'application/json',
+                    },
+                })
+            );
+
+            const source = new MessageChannel().port1;
+            const postMessageStub = sandbox.stub(source, 'postMessage');
+
+            const messageEvent = new MessageEvent('message', {
+                data: {
+                    type: 'CHECK_FORM_HASH',
+                    enketoId,
+                    url: formURL,
+                },
+                source,
+            });
+
+            self.dispatchEvent(messageEvent);
+
+            const timeout = setTimeout(() => {
+                throw new Error('Timed out');
+            }, 2000);
+
+            while (!postMessageStub.called) {
+                const now = Date.now();
+
+                // eslint-disable-next-line no-await-in-loop
+                await Promise.resolve();
+
+                // eslint-disable-next-line no-await-in-loop
+                await timers.tickAsync(Date.now() - now);
+            }
+
+            clearTimeout(timeout);
+
+            source.removeEventListener('message', postMessageStub);
+
+            expect(postMessageStub).to.have.been.calledOnceWith({
+                type: 'FORM_UP_TO_DATE',
+                enketoId,
+            });
+        });
+
+        it('notifies a client when a form update check fails (e.g. when offline)', async () => {
+            const formURL = new URL(
+                `${basePath}/x/${enketoId}`,
+                window.location.href
+            ).href;
+            const transformURL = new URL(
+                `${basePath}/transform/xform/${enketoId}`,
+                window.location.href
+            ).href;
+
+            const cache = await caches.open(FORMS_CACHE);
+
+            await cache.put(
+                transformURL,
+                new Response('{"hash": "8675e"}', {
+                    headers: {
+                        'content-type': 'application/json',
+                    },
+                })
+            );
+
+            const source = new MessageChannel().port1;
+            const postMessageStub = sandbox.stub(source, 'postMessage');
+
+            const messageEvent = new MessageEvent('message', {
+                data: {
+                    type: 'CHECK_FORM_HASH',
+                    enketoId,
+                    url: formURL,
+                },
+                source,
+            });
+
+            self.dispatchEvent(messageEvent);
+
+            const timeout = setTimeout(() => {
+                throw new Error('Timed out');
+            }, 2000);
+
+            while (!postMessageStub.called) {
+                const now = Date.now();
+
+                // eslint-disable-next-line no-await-in-loop
+                await Promise.resolve();
+
+                // eslint-disable-next-line no-await-in-loop
+                await timers.tickAsync(Date.now() - now);
+            }
+
+            clearTimeout(timeout);
+
+            source.removeEventListener('message', postMessageStub);
+
+            expect(postMessageStub).to.have.been.calledOnceWith({
+                type: 'FORM_UPDATE_UNKNOWN',
+                enketoId,
+            });
         });
     });
 });

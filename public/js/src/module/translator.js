@@ -22,11 +22,8 @@ const htmlParagraphsPostProcessor = {
 
 /**
  * Initializes translator and resolves **when translations have been loaded**.
- *
- * @param  {=*?} something - can be anything
- * @return { Promise }       promise resolving the original something argument
  */
-const init = (something) => initialize.then(() => something);
+const init = () => initialize;
 
 const initialize = new Promise((resolve, reject) => {
     i18next

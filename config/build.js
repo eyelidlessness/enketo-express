@@ -5,13 +5,13 @@ const pkg = require('../package.json');
 const cwd = process.cwd();
 
 const entryPoints = pkg.entries.map((entry) => path.resolve(cwd, entry));
-const { NODE_ENV } = process.env;
+const { NODE_ENV = 'production' } = process.env;
 const isProduction = NODE_ENV === 'production';
 
 module.exports = {
     bundle: true,
     define: {
-        ENV: JSON.stringify(NODE_ENV ?? 'production'),
+        ENV: JSON.stringify(NODE_ENV),
     },
     entryPoints,
     format: 'iife',

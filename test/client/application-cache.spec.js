@@ -1,9 +1,18 @@
 import applicationCache from '../../public/js/src/module/application-cache';
 import events from '../../public/js/src/module/event';
 import settings from '../../public/js/src/module/settings';
+import * as unmockable from '../../public/js/src/module/unmockable';
+
+class TestServiceWorker {
+    constructor() {
+        /** @type {(message: any) => void} */
+        this.postMessage = () => {};
+    }
+}
 
 describe('Application cache initialization (offline service worker registration)', () => {
     const basePath = '-';
+    const enketoId = '3a673';
     const version = `1.2.3-BADB3D`;
     const applicationUpdatedEvent = events.ApplicationUpdated();
     const applicationUpdatedType = applicationUpdatedEvent.type;
@@ -30,8 +39,8 @@ describe('Application cache initialization (offline service worker registration)
     /** @type {sinon.SinonFake} */
     let registrationUpdateFake;
 
-    /** @type {Function | null} */
-    let controllerChangeListener;
+    /** @type {Record<string, Function[]>} */
+    let serviceWorkerListeners = {};
 
     beforeEach(() => {
         sandbox = sinon.createSandbox();
@@ -58,7 +67,7 @@ describe('Application cache initialization (offline service worker registration)
                 })
             );
         reloadStub = sandbox
-            .stub(applicationCache.location, 'reload')
+            .stub(unmockable.location, 'reload')
             .callsFake(() => {});
 
         settings.basePath ??= undefined;
@@ -66,19 +75,20 @@ describe('Application cache initialization (offline service worker registration)
         sandbox.stub(settings, 'basePath').value(basePath);
         sandbox.stub(settings, 'version').value(version);
 
-        const addControllerChangeListener =
+        const addServiceWorkerListener =
             navigator.serviceWorker.addEventListener;
 
-        controllerChangeListener = null;
+        serviceWorkerListeners = {};
 
         sandbox
             .stub(navigator.serviceWorker, 'addEventListener')
             .callsFake((type, listener) => {
-                if (type === 'controllerchange') {
-                    expect(controllerChangeListener).to.equal(null);
-                    controllerChangeListener = listener;
-                }
-                addControllerChangeListener.call(
+                const listeners = serviceWorkerListeners[type] ?? [];
+
+                serviceWorkerListeners[type] = listeners;
+                listeners.push(listener);
+
+                addServiceWorkerListener.call(
                     navigator.serviceWorker,
                     type,
                     listener
@@ -92,12 +102,11 @@ describe('Application cache initialization (offline service worker registration)
             offlineLaunchCapableListener
         );
 
-        if (controllerChangeListener != null) {
-            navigator.serviceWorker.removeEventListener(
-                'controllerchange',
-                controllerChangeListener
-            );
-        }
+        Object.entries(serviceWorkerListeners).forEach(([type, listeners]) => {
+            listeners.forEach((listener) => {
+                navigator.serviceWorker.removeEventListener(type, listener);
+            });
+        });
 
         timers.reset();
         timers.restore();
@@ -105,7 +114,7 @@ describe('Application cache initialization (offline service worker registration)
     });
 
     it('registers the service worker script', async () => {
-        await applicationCache.init();
+        await applicationCache.init(enketoId);
 
         expect(registrationStub).to.have.been.calledWith(
             new URL(
@@ -116,23 +125,23 @@ describe('Application cache initialization (offline service worker registration)
     });
 
     it('reloads immediately after registering the service worker for the first time', async () => {
-        await applicationCache.init();
+        await applicationCache.init(enketoId);
 
         expect(reloadStub).to.have.been.called;
     });
 
     it('does not reload immediately after registering the service worker for subsequent times', async () => {
-        activeServiceWorker = {};
+        activeServiceWorker = new TestServiceWorker();
 
-        await applicationCache.init();
+        await applicationCache.init(enketoId);
 
         expect(reloadStub).not.to.have.been.called;
     });
 
     it('reports offline capability after registering the service worker for subsequent times', async () => {
-        activeServiceWorker = {};
+        activeServiceWorker = new TestServiceWorker();
 
-        await applicationCache.init();
+        await applicationCache.init(enketoId);
 
         expect(offlineLaunchCapableListener).to.have.been.calledWith(
             events.OfflineLaunchCapable({ capable: true })
@@ -140,11 +149,11 @@ describe('Application cache initialization (offline service worker registration)
     });
 
     it('reports offline capability is not available when service workers are not available', async () => {
-        activeServiceWorker = {};
+        activeServiceWorker = new TestServiceWorker();
 
         sandbox.stub(navigator, 'serviceWorker').value(null);
 
-        await applicationCache.init();
+        await applicationCache.init(enketoId);
 
         expect(offlineLaunchCapableListener).to.have.been.calledWith(
             events.OfflineLaunchCapable({ capable: false })
@@ -152,7 +161,7 @@ describe('Application cache initialization (offline service worker registration)
     });
 
     it('reports offline capability is not available when registration throws an error', async () => {
-        activeServiceWorker = {};
+        activeServiceWorker = new TestServiceWorker();
 
         const error = new Error('Something bad');
 
@@ -162,7 +171,7 @@ describe('Application cache initialization (offline service worker registration)
         let caught;
 
         try {
-            await applicationCache.init();
+            await applicationCache.init(enketoId);
         } catch (error) {
             caught = error;
         }
@@ -176,24 +185,24 @@ describe('Application cache initialization (offline service worker registration)
     });
 
     it('reloads when an updated service worker becomes active on load', async () => {
-        activeServiceWorker = {};
-        await applicationCache.init();
+        activeServiceWorker = new TestServiceWorker();
+        await applicationCache.init(enketoId);
 
-        expect(applicationCache.location.reload).not.to.have.been.called;
+        expect(unmockable.location.reload).not.to.have.been.called;
 
         navigator.serviceWorker.dispatchEvent(new Event('controllerchange'));
 
-        expect(applicationCache.location.reload).to.have.been.called;
+        expect(unmockable.location.reload).to.have.been.called;
     });
 
-    it('checks for updates immediately after registration', async () => {
-        await applicationCache.init();
+    it('checks for application updates immediately after registration', async () => {
+        await applicationCache.init(enketoId);
 
         expect(registrationUpdateFake).to.have.been.calledOnce;
     });
 
-    it('checks for updates periodically', async () => {
-        await applicationCache.init();
+    it('checks for application updates periodically', async () => {
+        await applicationCache.init(enketoId);
 
         expect(registrationUpdateFake).to.have.been.calledOnce;
 
@@ -207,8 +216,8 @@ describe('Application cache initialization (offline service worker registration)
     });
 
     it('notifies the user, rather than reloading, when a service worker update is detected some time after the page is loaded', async () => {
-        activeServiceWorker = {};
-        await applicationCache.init();
+        activeServiceWorker = new TestServiceWorker();
+        await applicationCache.init(enketoId);
 
         timers.tick(applicationCache.RELOAD_ON_UPDATE_TIMEOUT);
 
@@ -220,5 +229,86 @@ describe('Application cache initialization (offline service worker registration)
 
         expect(reloadStub).not.to.have.been.called;
         expect(listener).to.have.been.calledOnceWith(applicationUpdatedEvent);
+    });
+
+    it('messages the active service worker to check for form updates immediately after registration', async () => {
+        activeServiceWorker = new TestServiceWorker();
+
+        const postMessageStub = sandbox.stub(
+            activeServiceWorker,
+            'postMessage'
+        );
+
+        await applicationCache.init(enketoId);
+
+        expect(postMessageStub).to.have.been.calledOnceWith({
+            type: 'CHECK_FORM_HASH',
+            enketoId,
+            url: unmockable.location.href,
+        });
+    });
+
+    it('checks for form updates periodically', async () => {
+        activeServiceWorker = new TestServiceWorker();
+
+        const postMessageStub = sandbox.stub(
+            activeServiceWorker,
+            'postMessage'
+        );
+
+        await applicationCache.init(enketoId);
+
+        expect(postMessageStub).to.have.been.calledOnce;
+
+        timers.tick(applicationCache.UPDATE_FORM_INTERVAL);
+
+        expect(postMessageStub).to.have.been.calledTwice;
+
+        timers.tick(applicationCache.UPDATE_FORM_INTERVAL);
+
+        expect(postMessageStub).to.have.been.calledThrice;
+
+        const calls = postMessageStub.getCalls();
+
+        calls.forEach((call) => {
+            const { args } = call;
+
+            expect(args).to.deep.equal([
+                {
+                    type: 'CHECK_FORM_HASH',
+                    enketoId,
+                    url: unmockable.location.href,
+                },
+            ]);
+        });
+    });
+
+    it('notifies users when the service worker detects a form update', async () => {
+        /** @type {Event | null} */
+        let formUpdated = null;
+
+        const formUpdatedListener = (event) => {
+            formUpdated = event;
+        };
+
+        const formUpdatedEventType = events.FormUpdated().type;
+
+        document.addEventListener(formUpdatedEventType, formUpdatedListener);
+
+        activeServiceWorker = new TestServiceWorker();
+        await applicationCache.init(enketoId);
+
+        navigator.serviceWorker.dispatchEvent(
+            new MessageEvent('message', {
+                data: {
+                    type: 'FORM_UPDATED',
+                    enketoId,
+                },
+            })
+        );
+
+        document.removeEventListener('message', formUpdated);
+
+        expect(formUpdated.type).to.equal(formUpdatedEventType);
     });
 });

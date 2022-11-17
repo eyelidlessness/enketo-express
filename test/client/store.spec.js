@@ -18,33 +18,16 @@ import store from '../../public/js/src/module/store';
  */
 
 describe('Client Storage', () => {
-    let resourceA;
-    let resourceB;
     let fileA;
     let fileB;
     let recordA;
     let recordB;
-
-    /** @type {Survey} */
-    let surveyA;
 
     before((done) => {
         store.init().then(() => done());
     });
 
     beforeEach(() => {
-        resourceA = {
-            url: '/path/to/resource1',
-            item: new Blob(['<html>something1</html'], {
-                type: 'text/xml',
-            }),
-        };
-        resourceB = {
-            url: '/path/to/resource2',
-            item: new Blob(['<html>something2</html'], {
-                type: 'text/xml',
-            }),
-        };
         fileA = {
             name: 'something1.xml',
             item: new Blob(['<html>something1</html'], {
@@ -68,12 +51,6 @@ describe('Client Storage', () => {
             enketoId: 'surveyA',
             name: 'name B',
             xml: '<model></model>',
-        };
-        surveyA = {
-            enketoId: 'surveyA',
-            form: '<form class="or"></form>',
-            model: '<model></model>',
-            hash: '12345',
         };
     });
 
@@ -151,128 +128,6 @@ describe('Client Storage', () => {
                     done();
                 })
                 .catch(done);
-        });
-    });
-
-    describe('storing surveys', () => {
-        afterEach((done) => {
-            store.survey.removeAll().then(done, done);
-        });
-
-        it('fails if the survey has no "form" property', () => {
-            delete surveyA.form;
-            // note: the throw assert works here because the error is thrown before in sync part of function
-            expect(() => {
-                store.survey.set(surveyA);
-            }).to.throw(/not complete/);
-        });
-
-        it('fails if the survey has no "model" property', () => {
-            delete surveyA.model;
-            // note: the throw assert works here because the error is thrown before in sync part of function
-            expect(() => {
-                store.survey.set(surveyA);
-            }).to.throw(/not complete/);
-        });
-
-        it('fails if the survey has no "id" property', () => {
-            delete surveyA.enketoId;
-            // note: the throw assert works here because the error is thrown before in sync part of function
-            expect(() => {
-                store.survey.set(surveyA);
-            }).to.throw(/not complete/);
-        });
-
-        it('fails if the survey has no "hash" property', () => {
-            delete surveyA.hash;
-            // note: the throw assert works here because the error is thrown before in sync part of function
-            expect(() => {
-                store.survey.set(surveyA);
-            }).to.throw(/not complete/);
-        });
-
-        it("succeeds if the survey has the required properties and doesn't exist already", (done) => {
-            store.survey
-                .set(surveyA)
-                .then((result) => {
-                    // check response of setSurvey
-                    expect(result).to.deep.equal(surveyA);
-                    return store.survey.get(surveyA.enketoId);
-                })
-                .then((result) => {
-                    // check response of getSurvey
-                    expect(result).to.deep.equal(surveyA);
-                })
-                .then(done, done);
-        });
-
-        it('fails if a survey with that id already exists in the db', (done) => {
-            store.survey
-                .set(surveyA)
-                .then(() => store.survey.set(surveyA))
-                .catch(() => {
-                    expect(true).to.equal(true);
-                    done();
-                });
-        });
-    });
-
-    describe('getting surveys', () => {
-        afterEach((done) => {
-            store.survey.removeAll().then(done, done);
-        });
-
-        it('returns undefined if a survey does not exist', (done) => {
-            store.survey
-                .get('nonexisting')
-                .then((result) => {
-                    expect(result).to.equal(undefined);
-                })
-                .then(done, done);
-        });
-    });
-
-    describe('updating surveys', () => {
-        afterEach((done) => {
-            store.survey.removeAll().then(done, done);
-        });
-
-        it('succeeds if the survey has the required properties and contains no file resources', (done) => {
-            store.survey
-                .set(surveyA)
-                .then(() => {
-                    surveyA.model = '<model><new>value</new></model>';
-                    surveyA.hash = '6789';
-                    return store.survey.update(surveyA);
-                })
-                .then((result) => {
-                    // check response of updateSurvey
-                    expect(result).to.deep.equal(surveyA);
-                    return store.survey.get(surveyA.enketoId);
-                })
-                .then((result) => {
-                    // check response of getSurvey
-                    expect(result.model).to.equal(surveyA.model);
-                    expect(result.hash).to.equal(surveyA.hash);
-                })
-                .then(done, done);
-        });
-    });
-
-    describe('removing surveys', () => {
-        afterEach((done) => {
-            store.survey.removeAll().then(done, done);
-        });
-
-        it('succeeds if the survey contains no files', (done) => {
-            store.survey
-                .set(surveyA)
-                .then(() => store.survey.remove(surveyA.enketoId))
-                .then(() => store.survey.get(surveyA.enketoId))
-                .then((result) => {
-                    expect(result).to.equal(undefined);
-                })
-                .then(done, done);
         });
     });
 

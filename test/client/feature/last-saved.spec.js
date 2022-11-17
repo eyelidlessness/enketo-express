@@ -12,7 +12,6 @@
 
 import connection from '../../../public/js/src/module/connection';
 import encryptor from '../../../public/js/src/module/encryptor';
-import formCache from '../../../public/js/src/module/form-cache';
 import {
     getLastSavedRecord,
     isLastSaveEnabled,
@@ -75,10 +74,7 @@ describe('Support for jr://instance/last-saved endpoint', () => {
     let timers;
 
     /** @type { Survey } */
-    let surveyA;
-
-    /** @type { Survey } */
-    let surveyB;
+    let survey;
 
     /** @type { EnketoRecord } */
     let recordA;
@@ -109,7 +105,7 @@ describe('Support for jr://instance/last-saved endpoint', () => {
 
         autoSavedKey = records.getAutoSavedKey();
 
-        surveyA = {
+        survey = {
             openRosaId: 'formA',
             openRosaServer: 'http://localhost:3000',
             enketoId: enketoIdA,
@@ -123,22 +119,6 @@ describe('Support for jr://instance/last-saved endpoint', () => {
             form: `<form class="or"><img src="/path/to/${enketoIdA}.jpg"/></form>`,
             model: `<model><instance><data id="${enketoIdA}"><foo/></data></instance></model>`,
             hash: '12345',
-        };
-
-        surveyB = {
-            openRosaId: 'formB',
-            openRosaServer: 'http://localhost:3000',
-            enketoId: enketoIdB,
-            externalData: [
-                {
-                    id: 'last-saved',
-                    src: 'jr://instance/last-saved',
-                },
-            ],
-            theme: '',
-            form: `<form class="or"><img src="/path/to/${enketoIdB}.jpg"/></form>`,
-            model: `<model><instance><data id="${enketoIdB}"><bar/></data></instance></model>`,
-            hash: '67890',
         };
 
         recordA = {
@@ -178,8 +158,6 @@ describe('Support for jr://instance/last-saved endpoint', () => {
                     files: [],
                 })
             )
-            .then(() => store.survey.set(surveyA))
-            .then(() => store.survey.set(surveyB))
             .then(() => done(), done);
     });
 
@@ -196,7 +174,7 @@ describe('Support for jr://instance/last-saved endpoint', () => {
         Promise.all([
             store.property.removeAll(),
             store.record.removeAll(),
-            store.survey.removeAll(),
+            // store.survey.removeAll(),
             store.lastSavedRecords.clear(),
         ]).then(() => done(), done);
     });
@@ -206,39 +184,6 @@ describe('Support for jr://instance/last-saved endpoint', () => {
     });
 
     describe('surveys', () => {
-        /**
-         * @param {Partial<GetFormPartsStubResult>} updates
-         */
-        const updateSurvey = (updates) => {
-            // Ensure `_updateCache` receives a new hash indicating it should perform an update
-            sandbox
-                .stub(connection, 'getFormPartsHash')
-                .callsFake(() => Promise.resolve(updates.hash));
-
-            const updatePromise = new Promise((resolve) => {
-                setTimeout(resolve, formCache.CACHE_UPDATE_INITIAL_DELAY + 1);
-            });
-
-            const originalStoreUpdate = store.survey.update.bind(store.survey);
-
-            sandbox.stub(store.survey, 'update').callsFake((update) =>
-                originalStoreUpdate(update).then((result) => {
-                    if (update.model === updates.model) {
-                        timers.tick(1);
-                    }
-
-                    return result;
-                })
-            );
-
-            timers.tick(formCache.CACHE_UPDATE_INITIAL_DELAY);
-
-            getFormPartsStubResult = { ...getFormPartsStubResult, ...updates };
-
-            // Wait for `_updateCache` to resolve
-            return updatePromise.then(() => formCache.get(survey));
-        };
-
         const url1 = '/path/to/source.png';
         const form1 = `<form class="or"><img src="${url1}"/></form>`;
         const defaultInstanceData =
@@ -247,9 +192,6 @@ describe('Support for jr://instance/last-saved endpoint', () => {
         const hash1 = '12345';
 
         const parser = new DOMParser();
-
-        /** @type { Survey } */
-        let survey;
 
         /** @type {SurveyExternalData} */
         let lastSavedExternalData;
@@ -276,6 +218,15 @@ describe('Support for jr://instance/last-saved endpoint', () => {
                 openRosaServer: 'http://localhost:3000',
                 enketoId,
                 theme: '',
+                form: `<form class="or"><img src="/path/to/${enketoId}.jpg"/></form>`,
+                model: `<model><instance><data id="${enketoId}"><foo/></data></instance></model>`,
+                hash: '86753',
+                externalData: [
+                    {
+                        id: 'last-saved',
+                        src: 'jr://instance/last-saved',
+                    },
+                ],
             };
 
             sandbox.stub(settings, 'enketoId').get(() => enketoId);
@@ -320,38 +271,11 @@ describe('Support for jr://instance/last-saved endpoint', () => {
             store.init().then(done, done);
         });
 
-        afterEach((done) => {
-            store.survey.removeAll().then(done, done);
-        });
-
         it("sets the survey's last saved record", (done) => {
             const originalRecord = { ...record };
 
-            formCache
-                .init(survey)
-                .then((survey) => setLastSavedRecord(survey, record))
+            setLastSavedRecord(survey, record)
                 .then(({ lastSavedRecord }) => {
-                    Object.entries(originalRecord).forEach(([key, value]) => {
-                        expect(lastSavedRecord[key]).to.equal(value);
-                    });
-                })
-                .then(done, done);
-        });
-
-        it('preserves the last saved record when a form is updated', (done) => {
-            const originalRecord = { ...record };
-            const update = {
-                ...survey,
-                hash: '123456',
-                model: `${model1}<!-- updated -->`,
-            };
-
-            formCache
-                .init(survey)
-                .then((survey) => setLastSavedRecord(survey, record))
-                .then(() => updateSurvey(update))
-                .then(() => getLastSavedRecord(enketoId))
-                .then((lastSavedRecord) => {
                     Object.entries(originalRecord).forEach(([key, value]) => {
                         expect(lastSavedRecord[key]).to.equal(value);
                     });
@@ -366,9 +290,7 @@ describe('Support for jr://instance/last-saved endpoint', () => {
                 xml: `<data id="surveyA"><item>${updatedItemValue}</item><meta><instanceID>uuid:ea3baa91-74b5-4892-af6f-96267f7fe12e</instanceID></meta></data>`,
             };
 
-            formCache
-                .init(survey)
-                .then((survey) => setLastSavedRecord(survey, update))
+            setLastSavedRecord(survey, update)
                 .then(({ survey }) => {
                     expect(Array.isArray(survey.externalData)).to.equal(true);
                     expect(survey.externalData.length).to.equal(1);
@@ -390,19 +312,12 @@ describe('Support for jr://instance/last-saved endpoint', () => {
         });
 
         it("does not set the survey's last saved record when encryption is enabled", (done) => {
-            /** @type {Survey} */
-            let encryptedSurvey;
-
-            encryptor.setEncryptionEnabled(survey);
-
             const form = { id: 'abc', version: '2', encryptionKey };
 
-            formCache
-                .init(survey)
-                .then((survey) => {
-                    encryptedSurvey = encryptor.setEncryptionEnabled(survey);
-                })
-                .then(() => encryptor.encryptRecord(form, record))
+            const encryptedSurvey = encryptor.setEncryptionEnabled(survey);
+
+            encryptor
+                .encryptRecord(form, record)
                 .then((encryptedRecord) =>
                     setLastSavedRecord(encryptedSurvey, encryptedRecord)
                 )
@@ -417,9 +332,7 @@ describe('Support for jr://instance/last-saved endpoint', () => {
 
             record.draft = true;
 
-            formCache
-                .init(survey)
-                .then((survey) => setLastSavedRecord(survey, record))
+            setLastSavedRecord(survey, record)
                 .then(({ lastSavedRecord }) => {
                     expect(lastSavedRecord).to.equal(undefined);
                 })
@@ -427,14 +340,12 @@ describe('Support for jr://instance/last-saved endpoint', () => {
         });
 
         it("does not set the survey's last saved record when the model does not populate a last-saved secondary instance", (done) => {
-            getFormPartsStubResult = {
-                ...getFormPartsStubResult,
+            survey = {
+                ...survey,
                 externalData: [],
             };
 
-            formCache
-                .init(survey)
-                .then((survey) => setLastSavedRecord(survey, record))
+            setLastSavedRecord(survey, record)
                 .then(({ lastSavedRecord }) => {
                     expect(lastSavedRecord).to.equal(undefined);
                 })
@@ -449,10 +360,8 @@ describe('Support for jr://instance/last-saved endpoint', () => {
                 externalData: [],
             };
 
-            formCache
-                .init(survey)
-                .then((survey) => setLastSavedRecord(survey, record))
-                .then(() => updateSurvey(update))
+            setLastSavedRecord(survey, record)
+                .then(() => setLastSavedRecord(update, record))
                 .then(() => getLastSavedRecord(enketoId))
                 .then((lastSavedRecord) => {
                     expect(lastSavedRecord).to.equal(undefined);
@@ -463,9 +372,7 @@ describe('Support for jr://instance/last-saved endpoint', () => {
         it("gets the survey's last saved record", (done) => {
             const originalRecord = { ...record };
 
-            formCache
-                .init(survey)
-                .then((survey) => setLastSavedRecord(survey, record))
+            setLastSavedRecord(survey, record)
                 .then(({ survey }) => getLastSavedRecord(survey.enketoId))
                 .then((lastSavedRecord) => {
                     Object.entries(originalRecord).forEach(([key, value]) => {
@@ -477,15 +384,15 @@ describe('Support for jr://instance/last-saved endpoint', () => {
     });
 
     describe('storage for offline mode', () => {
-        beforeEach((done) => {
-            formCache.init(surveyA).then(() => done(), done);
-        });
+        // beforeEach((done) => {
+        //     formCache.init(survey).then(() => done(), done);
+        // });
 
         it('creates a last-saved record when creating a record', (done) => {
             const originalRecord = { ...recordA };
 
             records
-                .save('set', recordA)
+                .save(survey, 'set', recordA)
                 .then(() => getLastSavedRecord(enketoId))
                 .then((record) => {
                     Object.entries(originalRecord).forEach(([key, value]) => {
@@ -499,8 +406,8 @@ describe('Support for jr://instance/last-saved endpoint', () => {
             const originalRecord = { ...recordA };
 
             records
-                .save('set', recordB)
-                .then(() => records.save('set', recordA))
+                .save(survey, 'set', recordB)
+                .then(() => records.save(survey, 'set', recordA))
                 .then(() => getLastSavedRecord(enketoId))
                 .then((record) => {
                     Object.entries(originalRecord).forEach(([key, value]) => {
@@ -511,8 +418,6 @@ describe('Support for jr://instance/last-saved endpoint', () => {
         });
 
         it('creates a last-saved record when updating a record', (done) => {
-            const originalSurvey = { ...surveyA };
-
             const update = {
                 draft: false,
                 enketoId,
@@ -523,13 +428,8 @@ describe('Support for jr://instance/last-saved endpoint', () => {
             const payload = { ...update };
 
             records
-                .save('set', recordA)
-                .then(() =>
-                    // This would be the condition in cases where a record already
-                    // existed before this feature was implemented
-                    store.survey.update(originalSurvey)
-                )
-                .then(() => records.save('update', update))
+                .save(survey, 'set', recordA)
+                .then(() => records.save(survey, 'update', update))
                 .then(() => getLastSavedRecord(enketoId))
                 .then((record) => {
                     Object.entries(payload).forEach(([key, value]) => {
@@ -550,8 +450,8 @@ describe('Support for jr://instance/last-saved endpoint', () => {
             const payload = { ...update };
 
             records
-                .save('set', recordA)
-                .then(() => records.save('update', update))
+                .save(survey, 'set', recordA)
+                .then(() => records.save(survey, 'update', update))
                 .then(() => getLastSavedRecord(enketoId))
                 .then((record) => {
                     Object.entries(payload).forEach(([key, value]) => {
@@ -577,7 +477,7 @@ describe('Support for jr://instance/last-saved endpoint', () => {
 
             // Create record/last-saved for first form id
             records
-                .save('set', recordA)
+                .save(survey, 'set', recordA)
                 // Create autosave record for second form id
                 .then(() => {
                     enketoId = enketoIdB;
@@ -592,7 +492,7 @@ describe('Support for jr://instance/last-saved endpoint', () => {
                     });
                 })
                 // Create record/last-saved for second form id
-                .then(() => records.save('set', recordB))
+                .then(() => records.save(survey, 'set', recordB))
                 // Get last-saved record for second form id
                 .then(() => getLastSavedRecord(enketoId))
                 // Validate last-saved record for second form id
@@ -640,7 +540,7 @@ describe('Support for jr://instance/last-saved endpoint', () => {
             const originalRecord = { ...recordA };
 
             connection
-                .uploadRecord(surveyA, recordA)
+                .uploadRecord(survey, recordA)
                 .then(() => getLastSavedRecord(enketoId))
                 .then((record) => {
                     expect(record).to.deep.equal(originalRecord);
@@ -657,7 +557,7 @@ describe('Support for jr://instance/last-saved endpoint', () => {
             sandbox.stub(settings, 'type').get(() => 'edit');
 
             connection
-                .uploadRecord(surveyA, updates)
+                .uploadRecord(survey, updates)
                 .then(() => getLastSavedRecord(enketoId))
                 .then((lastSavedRecord) => {
                     expect(lastSavedRecord).to.equal(undefined);
@@ -676,11 +576,11 @@ describe('Support for jr://instance/last-saved endpoint', () => {
 
             sandbox.stub(settings, 'type').get(() => submissionType);
 
-            setLastSavedRecord(surveyA, recordA)
+            setLastSavedRecord(survey, recordA)
                 .then(() => {
                     submissionType = 'edit';
                 })
-                .then(() => connection.uploadRecord(surveyA, updates))
+                .then(() => connection.uploadRecord(survey, updates))
                 .then(() => {
                     submissionType = 'other';
                 })
@@ -697,20 +597,6 @@ describe('Support for jr://instance/last-saved endpoint', () => {
                 .then(() => getLastSavedRecord(enketoId))
                 .then((record) => {
                     expect(record).to.equal(undefined);
-                })
-                .then(done, done);
-        });
-
-        it('does not cache the survey when uploading a record', (done) => {
-            const surveySetStub = sandbox.stub(store.survey, 'set');
-            const surveyUpdateStub = sandbox.stub(store.survey, 'update');
-
-            store.survey
-                .removeAll()
-                .then(() => connection.uploadRecord(surveyA, recordA))
-                .then(() => {
-                    expect(surveySetStub.callCount).to.equal(0);
-                    expect(surveyUpdateStub.callCount).to.equal(0);
                 })
                 .then(done, done);
         });
@@ -879,33 +765,9 @@ describe('Support for jr://instance/last-saved endpoint', () => {
                 .then(done, done);
         });
 
-        it("updates an existing cached survey's last saved secondary instances when uploading a record", (done) => {
-            connection
-                .uploadRecord(surveyA, recordA)
-                .then(() => formCache.get(surveyA))
-                .then((cachedSurvey) => {
-                    expect(Array.isArray(cachedSurvey.externalData)).to.equal(
-                        true
-                    );
-                    expect(cachedSurvey.externalData.length).to.equal(1);
-
-                    const data = cachedSurvey.externalData[0];
-
-                    expect(data.id).to.equal('last-saved');
-                    expect(data.src).to.equal('jr://instance/last-saved');
-
-                    const xml = xmlSerializer.serializeToString(
-                        data.xml.documentElement,
-                        'text/xml'
-                    );
-
-                    expect(xml).to.equal(recordA.xml);
-                })
-                .then(done, done);
-        });
-
         it("populates a last-saved secondary instance with the model's defaults when requesting an encrypted form online", async () => {
-            const survey = await connection.getFormParts({ enketoId });
+            survey = await connection.getFormParts({ enketoId });
+
             const lastSavedRecord = {
                 enketoId,
                 instanceId,
@@ -919,41 +781,6 @@ describe('Support for jr://instance/last-saved endpoint', () => {
             isFormEncrypted = true;
 
             const result = await connection.getFormParts({ enketoId });
-
-            expect(Array.isArray(result.externalData)).to.equal(true);
-            expect(result.externalData.length).to.equal(1);
-
-            const data = result.externalData[0];
-
-            expect(data.id).to.equal('last-saved');
-            expect(data.src).to.equal('jr://instance/last-saved');
-
-            const xml = xmlSerializer.serializeToString(
-                data.xml.documentElement,
-                'text/xml'
-            );
-
-            expect(xml).not.to.equal(recordA.xml);
-            expect(xml).to.equal(defaultInstanceData);
-        });
-
-        it("populates a last-saved secondary instance with the model's defaults when encryption is enabled on an offline cached survey with a last-saved instance", async () => {
-            const parser = new DOMParser();
-            const model = parser.parseFromString(surveyA.model, 'text/xml');
-            const defaultInstance =
-                model.documentElement.querySelector('instance > *');
-            const defaultInstanceData = xmlSerializer.serializeToString(
-                defaultInstance,
-                'text/xml'
-            );
-
-            await setLastSavedRecord(surveyA, recordA);
-
-            const survey = await formCache.init(surveyA);
-            const encryptedSurvey = encryptor.setEncryptionEnabled(survey);
-
-            await store.survey.update(encryptedSurvey);
-            const result = await formCache.get({ enketoId });
 
             expect(Array.isArray(result.externalData)).to.equal(true);
             expect(result.externalData.length).to.equal(1);
@@ -1006,7 +833,7 @@ describe('Support for jr://instance/last-saved endpoint', () => {
         });
 
         it('does not enable last-saved', () => {
-            const result = isLastSaveEnabled(surveyA);
+            const result = isLastSaveEnabled(survey);
 
             expect(result).to.equal(false);
         });
@@ -1025,8 +852,8 @@ describe('Support for jr://instance/last-saved endpoint', () => {
 
         it('populates a last saved record with the default model', async () => {
             const defaultValue = 'default value';
-            const survey = {
-                ...surveyA,
+            const lastSavedDefaultSurvey = {
+                ...survey,
                 externalData: [
                     {
                         id: 'last-saved',
@@ -1040,7 +867,7 @@ describe('Support for jr://instance/last-saved endpoint', () => {
                 </model>`,
             };
             const { externalData } = populateLastSavedInstances(
-                survey,
+                lastSavedDefaultSurvey,
                 recordA
             );
             const [lastSaved] = externalData;
@@ -1051,8 +878,8 @@ describe('Support for jr://instance/last-saved endpoint', () => {
 
         it('ignores missing external data', async () => {
             const defaultValue = 'default value';
-            const survey = {
-                ...surveyA,
+            const missingExternalDataSurvey = {
+                ...survey,
                 externalData: [
                     {
                         id: 'last-saved',
@@ -1068,7 +895,7 @@ describe('Support for jr://instance/last-saved endpoint', () => {
                 </model>`,
             };
             const { externalData } = populateLastSavedInstances(
-                survey,
+                missingExternalDataSurvey,
                 recordA
             );
             const [lastSaved] = externalData;
@@ -1078,13 +905,13 @@ describe('Support for jr://instance/last-saved endpoint', () => {
         });
 
         it('does not attempt to set the last saved record', async () => {
-            await setLastSavedRecord(surveyA, recordA);
+            await setLastSavedRecord(survey, recordA);
 
             expect(updateStub).not.to.have.been.called;
         });
 
         it('does not attempt to remove the last saved record when setting with no last-saved record', async () => {
-            await setLastSavedRecord(surveyA);
+            await setLastSavedRecord(survey);
 
             expect(removeStub).not.to.have.been.called;
         });

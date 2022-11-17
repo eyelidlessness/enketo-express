@@ -224,37 +224,46 @@ describe('GeoJSON external secondary instances', () => {
             sandbox.stub(settings, 'basePath').value(basePath);
 
             const nativeFetch = window.fetch;
-            const transformURL = `${basePath}/transform/xform/${enketoId}`;
+            const transformURL = new URL(
+                `${basePath}/transform/xform/${enketoId}`,
+                window.location.origin
+            ).href;
             const geoJSONFileName = 'external-data.geojson';
             const expectedGeoJSONRequestURL = `/${basePath}/media/get/http/${serverURL}/v1/projects/21/forms/external-select-xml-3/attachments/${geoJSONFileName}`;
 
-            sandbox.stub(window, 'fetch').callsFake(async (url, options) => {
-                if (url === transformURL) {
-                    return {
-                        ok: true,
-                        status: 200,
-                        json: async () => structuredClone(transformed),
-                    };
-                }
+            sandbox
+                .stub(window, 'fetch')
+                .callsFake(async (request, options) => {
+                    const url = request.url ?? String(request);
 
-                if (url === expectedGeoJSONRequestURL) {
-                    const path = `${fixtureBasePath}${geoJSONFileName}`;
+                    if (url === transformURL) {
+                        return {
+                            ok: true,
+                            status: 200,
+                            json: async () => structuredClone(transformed),
+                        };
+                    }
 
-                    const response = await nativeFetch(path);
-                    const data = await response.json();
+                    if (url === expectedGeoJSONRequestURL) {
+                        const path = `${fixtureBasePath}${geoJSONFileName}`;
 
-                    return {
-                        ok: true,
-                        status: 200,
-                        headers: {
-                            get() {},
-                        },
-                        json: async () => data,
-                    };
-                }
+                        const response = await nativeFetch(path);
+                        const data = await response.json();
 
-                return nativeFetch(url, options);
-            });
+                        return {
+                            ok: true,
+                            status: 200,
+                            headers: {
+                                get() {},
+                            },
+                            json: async () => data,
+                        };
+                    }
+
+                    console.log('url', url);
+
+                    return nativeFetch(url, options);
+                });
 
             const range = document.createRange();
             const formParts = await connection.getFormParts({

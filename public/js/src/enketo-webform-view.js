@@ -28,8 +28,8 @@ preloadModule.init = () => {
     console.log('Preloaders disabled.');
 };
 
-initTranslator(survey)
-    .then((survey) => connection.getFormParts(survey))
+initTranslator()
+    .then(() => connection.getFormParts(survey))
     .then((formParts) => {
         if (survey.instanceId) {
             return connection.getExistingInstance(survey).then((response) => {

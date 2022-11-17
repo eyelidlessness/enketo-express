@@ -1,3 +1,7 @@
+/// <reference no-default-lib="true"/>
+/// <reference lib="ES2015" />
+/// <reference lib="webworker" />
+
 /** @private - exported for testing */
 export const FORMS_CACHE = 'enketo-forms';
 
@@ -67,6 +71,7 @@ const removeStaleCaches = async () => {
 
 const onActivate = async () => {
     await removeStaleCaches();
+    await self.clients.claim();
 
     console.log('Service worker activated');
 };
@@ -79,6 +84,61 @@ const FETCH_OPTIONS = {
     cache: 'reload',
     credentials: 'same-origin',
 };
+
+/**
+ * @param {Client} client
+ * @param {string} enketoId
+ * @param {string} url
+ */
+const checkFormHash = async (client, enketoId, url) => {
+    const hashURL = url.replace('/x/', '/transform/xform/hash/');
+    const transformURL = hashURL.replace('/hash/', '/');
+
+    try {
+        const [hashResponse, cachedResponse] = await Promise.all([
+            fetch(hashURL, FETCH_OPTIONS),
+            caches.match(transformURL),
+        ]);
+
+        if (hashResponse == null || cachedResponse == null) {
+            return;
+        }
+
+        let isStale = cachedResponse == null;
+
+        if (!isStale) {
+            const [{ hash }, { hash: cached }] = await Promise.all([
+                hashResponse.json(),
+                cachedResponse.json(),
+            ]);
+
+            isStale = cached == null || hash == null || hash !== cached;
+        }
+
+        client.postMessage({
+            type: isStale ? 'FORM_UPDATED' : 'FORM_UP_TO_DATE',
+            enketoId,
+        });
+    } catch (error) {
+        client.postMessage({
+            type: 'FORM_UPDATE_UNKNOWN',
+            enketoId,
+        });
+    }
+};
+
+self.addEventListener('message', async (event) => {
+    const { data, source: client } = event;
+    const { type, enketoId, url } = data;
+
+    if (
+        type === 'CHECK_FORM_HASH' &&
+        typeof enketoId === 'string' &&
+        typeof url === 'string'
+    ) {
+        checkFormHash(client, enketoId, url);
+    }
+});
 
 /**
  * @param {Request} request
