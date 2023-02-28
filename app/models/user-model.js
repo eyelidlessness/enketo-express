@@ -7,12 +7,27 @@ const url = require('url');
 // var debug = require( 'debug' )( 'user-model' );
 
 /**
+ * @typedef BearerAuth
+ * @property {string} bearer
+ */
+
+/**
+ * @typedef JWTAuth
+ * @property {string} user
+ * @property {string} pass
+ */
+
+/**
+ * @typedef {BearerAuth | JWTAuth} Credentials
+ */
+
+/**
  * Returns credentials from request object.
  * Handles `'basic'` and `'token'` authentication types.
  *
  * @static
  * @param {module:api-controller~ExpressRequest} req - HTTP request
- * @return {object|null} Credentials
+ * @return {Credentials | null} Credentials
  */
 function getCredentials(req) {
     const auth = req.app.get('linked form and data server').authentication;

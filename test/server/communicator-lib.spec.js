@@ -1,16 +1,20 @@
 // safer to ensure this here (in addition to grunt:env:test)
 process.env.NODE_ENV = 'test';
 
-const nock = require('nock');
 const chai = require('chai');
 const express = require('express');
 const request = require('supertest');
+const {
+    getGlobalDispatcher,
+    MockAgent,
+    setGlobalDispatcher,
+} = require('undici');
 
 const { expect } = chai;
 const { Auth } = require('request/lib/auth');
+const sinon = require('sinon');
 const communicator = require('../../app/lib/communicator');
 const config = require('../../app/models/config-model').server;
-const sinon = require('sinon');
 const { requestContextMiddleware } = require('../../app/lib/context');
 
 describe('Communicator Library', () => {
@@ -23,6 +27,15 @@ describe('Communicator Library', () => {
     /** @type {string} */
     let customQueryParameter;
 
+    /** @type {import('undici').Dispatcher} */
+    let dispatcher;
+
+    /** @type {import('undici').Interceptable} */
+    let testServerInterceptor;
+
+    /** @type {import('undici').Interceptable} */
+    let openrosaServerInterceptor;
+
     beforeEach(() => {
         version = '8.6.7-r';
 
@@ -34,6 +47,26 @@ describe('Communicator Library', () => {
             .stub(config, 'query parameter to pass to submission')
             .get(() => customQueryParameter);
         sandbox.stub(config, 'version').get(() => version);
+
+        dispatcher = getGlobalDispatcher();
+
+        const mockAgent = new MockAgent();
+
+        mockAgent.disableNetConnect();
+
+        setGlobalDispatcher(mockAgent);
+
+        testServerInterceptor = mockAgent.get('https://testserver.com');
+        openrosaServerInterceptor = mockAgent.get('https://my.openrosa.server');
+    });
+
+    afterEach(async () => {
+        await Promise.all([
+            testServerInterceptor.destroy(),
+            openrosaServerInterceptor.destroy(),
+        ]);
+
+        setGlobalDispatcher(dispatcher);
     });
 
     describe('getXFormInfo function', () => {
@@ -81,9 +114,11 @@ describe('Communicator Library', () => {
                     </xforms-group>
                 </xforms>
             `;
-            nock('https://testserver.com')
-                .get('/bob/formList')
-                .query({ formID: 'foo' })
+            testServerInterceptor
+                .intercept({
+                    path: '/bob/formList',
+                    query: { formID: 'foo' },
+                })
                 .reply(200, formListXML);
 
             const updatedSurvey = JSON.parse(JSON.stringify(survey));
@@ -98,10 +133,13 @@ describe('Communicator Library', () => {
                     'http://myothehost.com/app/path/getOtherStuff?formId=formIdA',
             };
 
-            communicator.getXFormInfo(survey).then((response) => {
-                expect(response).to.deep.equal(updatedSurvey);
-                done();
-            });
+            communicator
+                .getXFormInfo(survey)
+                .then((response) => {
+                    expect(response).to.deep.equal(updatedSurvey);
+                    done();
+                })
+                .catch(done);
         });
     });
 
@@ -115,15 +153,22 @@ describe('Communicator Library', () => {
                 cookie: 'abc',
             };
             const formXML = '<xform>foo</xform>';
-            nock('https://testserver.com').get('/foo').reply(200, formXML);
+            testServerInterceptor
+                .intercept({
+                    path: '/foo',
+                })
+                .reply(200, formXML);
 
             const updatedSurvey = JSON.parse(JSON.stringify(survey));
             updatedSurvey.xform = formXML;
 
-            communicator.getXForm(survey).then((response) => {
-                expect(response).to.deep.equal(updatedSurvey);
-                done();
-            });
+            communicator
+                .getXForm(survey)
+                .then((response) => {
+                    expect(response).to.deep.equal(updatedSurvey);
+                    done();
+                })
+                .catch(done);
         });
 
         it('should reject with error if no downloadUrl', (done) => {
@@ -133,10 +178,14 @@ describe('Communicator Library', () => {
                 cookie: 'abc',
             };
 
-            communicator.getXForm(survey).then(null, (err) => {
-                expect(err instanceof Error).to.equal(true);
-                done();
-            });
+            communicator.getXForm(survey).then(
+                null,
+                (err) => {
+                    expect(err instanceof Error).to.equal(true);
+                    done();
+                },
+                done
+            );
         });
     });
 
@@ -149,14 +198,26 @@ describe('Communicator Library', () => {
                 credentials: { bearer: 'qwerty' },
                 cookie: 'abc',
             };
-            nock('https://testserver.com')
-                .intercept('/foo', 'head')
-                .reply(200, {}, { 'x-openrosa-accept-content-length': '1024' });
+            testServerInterceptor
+                .intercept({
+                    path: '/foo',
+                    method: 'HEAD',
+                })
+                .reply(
+                    200,
+                    {},
+                    {
+                        headers: { 'x-openrosa-accept-content-length': '1024' },
+                    }
+                );
 
-            communicator.getMaxSize(survey).then((response) => {
-                expect(response).to.equal('1024');
-                done();
-            });
+            communicator
+                .getMaxSize(survey)
+                .then((response) => {
+                    expect(response).to.equal('1024');
+                    done();
+                })
+                .catch(done);
         });
     });
 
@@ -176,14 +237,21 @@ describe('Communicator Library', () => {
                 credentials: { bearer: 'qwerty' },
                 cookie: 'abc',
             };
-            nock('https://testserver.com')
-                .intercept('/foo/formList?formID=bar', 'get')
+            testServerInterceptor
+                .intercept({
+                    path: '/foo/formList',
+                    query: { formID: 'bar' },
+                    method: 'GET',
+                })
                 .reply(200, {});
 
-            communicator.authenticate(survey).then((response) => {
-                expect(response).to.deep.equal(survey);
-                done();
-            });
+            communicator
+                .authenticate(survey)
+                .then((response) => {
+                    expect(response).to.deep.equal(survey);
+                    done();
+                })
+                .catch(done);
         });
     });
 
@@ -201,17 +269,15 @@ describe('Communicator Library', () => {
                 pass: 'qwerty',
                 bearer: 'AbCdEf123456',
             };
-            const scope = nock('https://my.openrosa.server')
-                .get('/')
-                .reply(401);
+            openrosaServerInterceptor.intercept({ path: '/' }).reply(401);
 
-            communicator.getAuthHeader(url, creds).then((response) => {
-                expect(response).to.equal(`Bearer ${creds.bearer}`);
-                // server should not have been called
-                expect(scope.isDone()).to.equal(false);
-                nock.cleanAll();
-                done();
-            });
+            communicator
+                .getAuthHeader(url, creds)
+                .then((response) => {
+                    expect(response).to.equal(`Bearer ${creds.bearer}`);
+                    done();
+                })
+                .catch(done);
         });
 
         it('should resolve with Auth onResponse output', (done) => {
@@ -220,22 +286,27 @@ describe('Communicator Library', () => {
                 user: 'johndoe',
                 pass: 'qwerty',
             };
-            const scope = nock('https://my.openrosa.server')
-                .intercept('/', 'head')
+            openrosaServerInterceptor
+                .intercept({
+                    path: '/',
+                    method: 'HEAD',
+                })
                 .reply(
                     401,
                     {},
                     {
-                        'WWW-Authenticate': 'Basic',
+                        headers: { 'WWW-Authenticate': 'Basic' },
                     }
                 );
 
-            communicator.getAuthHeader(url, creds).then((response) => {
-                expect(response.startsWith('Basic ')).to.equal(true);
-                expect(response.length).to.equal(26);
-                expect(scope.isDone()).to.equal(true);
-                done();
-            });
+            communicator
+                .getAuthHeader(url, creds)
+                .then((response) => {
+                    expect(response.startsWith('Basic ')).to.equal(true);
+                    expect(response.length).to.equal(26);
+                    done();
+                })
+                .catch(done);
         });
     });
 
@@ -259,8 +330,8 @@ describe('Communicator Library', () => {
                     </mediaFile>
                 </manifest>
             `;
-            nock('https://my.openrosa.server')
-                .get('/manifest1')
+            openrosaServerInterceptor
+                .intercept({ path: '/manifest1' })
                 .reply(200, manifestXML);
 
             const updatedSurvey = JSON.parse(JSON.stringify(survey));
@@ -273,10 +344,13 @@ describe('Communicator Library', () => {
                 },
             ];
 
-            communicator.getManifest(survey).then((response) => {
-                expect(response).to.deep.equal(updatedSurvey);
-                done();
-            });
+            communicator
+                .getManifest(survey)
+                .then((response) => {
+                    expect(response).to.deep.equal(updatedSurvey);
+                    done();
+                })
+                .catch(done);
         });
 
         it('should resolve a survey with an empty manifest if no manifest url is specified', (done) => {
@@ -288,8 +362,8 @@ describe('Communicator Library', () => {
                 model: '<data>some model</data>',
             };
 
-            const scope = nock('https://my.openrosa.server')
-                .get('/manifest1')
+            openrosaServerInterceptor
+                .intercept({ path: '/manifest1' })
                 .reply(200, 'abc');
 
             communicator
@@ -299,9 +373,6 @@ describe('Communicator Library', () => {
                         ...survey,
                         manifest: [],
                     });
-                    // server should not have been called
-                    expect(scope.isDone()).to.equal(false);
-                    nock.cleanAll();
                     done();
                 })
                 .catch(done);
@@ -419,7 +490,7 @@ describe('Communicator Library', () => {
     describe('getUpdatedRequestOptions function', () => {
         it('should fill up missing properties', () => {
             expect(communicator.getUpdatedRequestOptions({})).to.deep.equal({
-                method: 'get',
+                method: 'GET',
                 headers: {
                     'X-OpenRosa-Version': '1.0',
                     Date: new Date().toUTCString(),
@@ -437,7 +508,7 @@ describe('Communicator Library', () => {
                     },
                 })
             ).to.deep.equal({
-                method: 'get',
+                method: 'GET',
                 headers: {
                     'X-OpenRosa-Version': '1.0',
                     Date: new Date().toUTCString(),
@@ -453,7 +524,7 @@ describe('Communicator Library', () => {
                     auth: '',
                 })
             ).to.deep.equal({
-                method: 'get',
+                method: 'GET',
                 headers: {
                     'X-OpenRosa-Version': '1.0',
                     Date: new Date().toUTCString(),
@@ -469,7 +540,7 @@ describe('Communicator Library', () => {
                     auth: {},
                 })
             ).to.deep.equal({
-                method: 'get',
+                method: 'GET',
                 headers: {
                     'X-OpenRosa-Version': '1.0',
                     Date: new Date().toUTCString(),

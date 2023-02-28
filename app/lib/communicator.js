@@ -2,8 +2,7 @@
  * @module communicator
  */
 
-const request = require('request');
-const { Auth } = require('request/lib/auth');
+const { request } = require('undici');
 const TError = require('./custom-error').TranslatedError;
 const config = require('../models/config-model').server;
 const debug = require('debug')('openrosa-communicator');
@@ -11,6 +10,7 @@ const Xml2Js = require('xml2js');
 
 const parser = new Xml2Js.Parser();
 const { getCurrentRequest } = require('./context');
+const { ResponseError } = require('./custom-error');
 
 const TIMEOUT = config.timeout;
 
@@ -27,17 +27,19 @@ function getXFormInfo(survey) {
         throw new Error('No server provided.');
     }
 
-    return _request({
-        url: getFormListUrl(
+    return openRosaRequest(
+        getFormListUrl(
             survey.openRosaServer,
             survey.openRosaId,
             survey.customParam
         ),
-        auth: survey.credentials,
-        headers: {
-            cookie: survey.cookie,
-        },
-    }).then((formListXml) => _findFormAddInfo(formListXml, survey));
+        {
+            auth: survey.credentials,
+            headers: {
+                cookie: survey.cookie,
+            },
+        }
+    ).then((formListXml) => _findFormAddInfo(formListXml, survey));
 }
 
 /**
@@ -59,8 +61,7 @@ function getXFormInfo(survey) {
  * @return { Promise<module:survey-model~SurveyObject> } a Promise that resolves with a survey object with added XForm
  */
 function getXForm(survey) {
-    return _request({
-        url: survey.info.downloadUrl,
+    return openRosaRequest(survey.info.downloadUrl, {
         auth: survey.credentials,
         headers: {
             cookie: survey.cookie,
@@ -86,8 +87,7 @@ function getManifest(survey) {
             manifest: [],
         });
     }
-    return _request({
-        url: survey.info.manifestUrl,
+    return openRosaRequest(survey.info.manifestUrl, {
         auth: survey.credentials,
         headers: {
             cookie: survey.cookie,
@@ -119,18 +119,13 @@ function getMaxSize(survey) {
         ? getSubmissionUrl(survey.openRosaServer)
         : survey.info.downloadUrl;
 
-    const options = {
-        url: submissionUrl,
+    return openRosaRequest(submissionUrl, {
         auth: survey.credentials,
         headers: {
-            cookie: survey.cookie,
+            Cookie: survey.cookie,
         },
-        method: 'head',
-    };
-
-    return _request(options).then(
-        (response) => response.headers['x-openrosa-accept-content-length']
-    );
+        method: 'HEAD',
+    }).then((response) => response.headers['x-openrosa-accept-content-length']);
 }
 
 /**
@@ -138,29 +133,29 @@ function getMaxSize(survey) {
  * @param { module:survey-model~SurveyObject } survey - survey object
  * @return { Promise<module:survey-model~SurveyObject> } a promise that resolves with a survey object
  */
-function authenticate(survey) {
-    const options = {
-        url: getFormListUrl(
+const authenticate = async (survey) => {
+    await openRosaRequest(
+        getFormListUrl(
             survey.openRosaServer,
             survey.openRosaId,
             survey.customParam
         ),
-        auth: survey.credentials,
-        headers: {
-            cookie: survey.cookie,
-        },
-        // Formhub has a bug and cannot use the correct HEAD method.
-        method: config['linked form and data server']['legacy formhub']
-            ? 'get'
-            : 'head',
-    };
+        {
+            auth: survey.credentials,
+            headers: {
+                cookie: survey.cookie,
+            },
+            // Formhub has a bug and cannot use the correct HEAD method.
+            method: config['linked form and data server']['legacy formhub']
+                ? 'GET'
+                : 'HEAD',
+        }
+    );
 
-    return _request(options).then(() => {
-        debug('successful (authenticated if it was necessary)');
+    debug('successful (authenticated if it was necessary)');
 
-        return survey;
-    });
-}
+    return survey;
+};
 
 /**
  * Generates an Auhorization header that can be used to inject into piped requests (e.g. submissions).
@@ -168,12 +163,11 @@ function authenticate(survey) {
  * @static
  * @param { string } url - URL to request
  * @param { {user: string, pass: string, bearer: string} } [credentials] - user credentials
- * @return { Promise } a promise that resolves with an auth header
+ * @return { Promise<string | null | undefined> } a promise that resolves with an auth header
  */
-function getAuthHeader(url, credentials) {
+const getAuthHeader = async (url, credentials) => {
     const options = {
-        url,
-        method: 'head',
+        method: 'HEAD',
         headers: {
             'X-OpenRosa-Version': '1.0',
             Date: new Date().toUTCString(),
@@ -181,37 +175,28 @@ function getAuthHeader(url, credentials) {
         timeout: TIMEOUT,
     };
 
-    return new Promise((resolve) => {
-        // Don't bother making Head request first if token was provided.
-        if (credentials && credentials.bearer) {
-            resolve(`Bearer ${credentials.bearer}`);
-        } else {
-            // Check if Basic or Digest Authorization header is required and return header if so.
-            const req = request(options, (error, response) => {
-                if (
-                    !error &&
-                    response &&
-                    response.statusCode === 401 &&
-                    credentials &&
-                    credentials.user &&
-                    credentials.pass
-                ) {
-                    // Using request's internal library we create an appropiate authorization header.
-                    // This is a bit dangerous because internal changes in request/request, could break this code.
-                    req.method = 'POST';
-                    const auth = new Auth(req);
-                    auth.hasAuth = true;
-                    auth.user = credentials.user;
-                    auth.pass = credentials.pass;
-                    const authHeader = auth.onResponse(response);
-                    resolve(authHeader);
-                } else {
-                    resolve(null);
-                }
-            });
+    const { bearer, user, pass } = credentials ?? {};
+
+    // Don't bother making Head request first if token was provided.
+    if (bearer) {
+        return `Bearer ${bearer}`;
+    }
+
+    try {
+        // Check if Basic or Digest Authorization header is required and return header if so.
+        const response = await request(url, options);
+
+        if (response.statusCode === 401 && user && pass) {
+            const auth = Buffer.from(`${user}:${pass}`).toString('base64');
+
+            return `Basic ${auth}`;
         }
-    });
-}
+    } catch (error) {
+        // Ignore errors
+    }
+
+    return null;
+};
 
 /**
  * getFormListUrl
@@ -294,18 +279,18 @@ const getUpdatedRequestHeaders = (
  * @param { object } options - request options
  */
 function getUpdatedRequestOptions(options) {
-    options.method = options.method || 'get';
+    options.method = options.method || 'GET';
 
     // set headers
     options.headers = getUpdatedRequestHeaders(options.headers);
     options.timeout = TIMEOUT;
 
     if (!options.headers.cookie) {
-        // remove undefined cookie
+        // remove falsy cookie
         delete options.headers.cookie;
     }
 
-    // set Authorization header
+    // Remove falsy Authorization header
     if (!options.auth) {
         delete options.auth;
     } else if (!options.auth.bearer) {
@@ -317,56 +302,62 @@ function getUpdatedRequestOptions(options) {
 }
 
 /**
+ * @template {'GET' | 'HEAD' | 'POST'} [Method='GET']
+ * @typedef OpenRosaRequestOptions
+ * @property {Method} [method]
+ * @property {Record<string, string>} [headers]
+ * @property {unknown} [auth]
+ */
+
+/**
+ * @typedef {Awaited<ReturnType<typeof request>>} Response
+ */
+
+/**
  * Sends a request to an OpenRosa server
  *
- * @param {{url: string}} options - request options object
- * @return { Promise } Promise
+ * @template {'GET' | 'HEAD' | 'POST'} [Method='GET']
+ * @param {string} url
+ * @param {OpenRosaRequestOptions<Method>} options - request options object
+ * @return {Promise<Method extends 'HEAD' ? Response : string>} Promise
  */
-function _request(options) {
-    let error;
+const openRosaRequest = async (url, options) => {
+    try {
+        const requestOptions = getUpdatedRequestOptions(options);
+        const response = await request(url, requestOptions);
+        const { statusCode } = response;
+        const body = await response.body.text();
 
-    return new Promise((resolve, reject) => {
-        if (typeof options !== 'object' && !options.url) {
-            error = new Error('Bad request. No options provided.');
-            error.status = 400;
-            reject(error);
+        if (statusCode === 401) {
+            throw new ResponseError(
+                statusCode,
+                'Forbidden. Authorization Required.'
+            );
         }
 
-        options = getUpdatedRequestOptions(options);
+        if (statusCode < 200 || statusCode >= 300) {
+            throw new ResponseError(
+                statusCode,
+                `Request to ${options.url} failed.`
+            );
+        }
 
-        // due to a bug in request/request using options.method with Digest Auth we won't pass method as an option
-        const { method } = options;
-        delete options.method;
+        if (options.method === 'HEAD') {
+            return response;
+        }
 
-        debug(`sending ${method} request to url: ${options.url}`);
+        debug(
+            `response of request to ${options.url} has status code: `,
+            statusCode
+        );
 
-        request[method](options, (error, response, body) => {
-            if (error) {
-                debug(`Error occurred when requesting ${options.url}`, error);
-                reject(error);
-            } else if (response.statusCode === 401) {
-                error = new Error('Forbidden. Authorization Required.');
-                error.status = response.statusCode;
-                reject(error);
-            } else if (
-                response.statusCode < 200 ||
-                response.statusCode >= 300
-            ) {
-                error = new Error(`Request to ${options.url} failed.`);
-                error.status = response.statusCode;
-                reject(error);
-            } else if (method === 'head') {
-                resolve(response);
-            } else {
-                debug(
-                    `response of request to ${options.url} has status code: `,
-                    response.statusCode
-                );
-                resolve(body);
-            }
-        });
-    });
-}
+        return body;
+    } catch (error) {
+        debug(`Error occurred when requesting ${options.url}`, error);
+
+        throw error;
+    }
+};
 
 /**
  * transform XML to JSON for easier processing
